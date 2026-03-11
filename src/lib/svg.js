@@ -1,6 +1,16 @@
 import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel } from "./utils";
 import { OVERLAY_TYPES } from "./constants";
 
+const VARIANT_COLORS = {
+  B: "#C9A84C", C: "#2A8C8C", D: "#6D28D9",
+  E: "#E74C3C", F: "#2ECC71", G: "#F39C12", H: "#E91E63",
+};
+function variantKeys(label) {
+  return label === "B"
+    ? { desktop: "variantDesktop", mobile: "variantMobile" }
+    : { desktop: `variant${label}Desktop`, mobile: `variant${label}Mobile` };
+}
+
 function escXml(s) {
   return String(s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -48,7 +58,42 @@ function screenshotOrZone(dataUrl, x, y, w, h, label, sub) {
 </svg>`;
 }
 
-export function generateSVG(t, screenshots = {}) {
+export function computeSVGZones(t) {
+  const W = 1200;
+  const HYP_WRAP = 46;
+  const LEAD = 16;
+  const ifLines   = wrap(t.if      || "—", HYP_WRAP);
+  const thenLines = wrap(t.then    || "—", HYP_WRAP);
+  const becLines  = wrap(t.because || "—", HYP_WRAP);
+  const blkH = (lines) => 9 + 8 + lines.length * LEAD + 12;
+  const hypContentH = 18 + 10 + blkH(ifLines) + 8 + blkH(thenLines) + 8 + blkH(becLines) + 16;
+  const metaInnerH  = Math.max(280, hypContentH);
+  const metaH = 40 + metaInnerH + 16;
+  const headerH  = 90;
+  const controlH = 500;
+  const variantH = 500;
+  const footerH  = 44;
+  const controlY = headerH + metaH;
+  const variants = t.variants ?? ["B"];
+  const variantsStartY = controlY + controlH;
+  const totalH = variantsStartY + variants.length * variantH + footerH;
+
+  const zones = [
+    { key: "controlDesktop", label: "Control — Desktop", x: 16,  y: controlY + 62, w: 734, h: controlH - 80 },
+    { key: "controlMobile",  label: "Control — Mobile",  x: 762, y: controlY + 62, w: 422, h: controlH - 80 },
+    ...variants.flatMap((label, i) => {
+      const vY = variantsStartY + i * variantH;
+      const keys = variantKeys(label);
+      return [
+        { key: keys.desktop, label: `Variant ${label} — Desktop`, x: 16,  y: vY + 62, w: 734, h: variantH - 80 },
+        { key: keys.mobile,  label: `Variant ${label} — Mobile`,  x: 762, y: vY + 62, w: 422, h: variantH - 80 },
+      ];
+    }),
+  ];
+  return { W, totalH, zones };
+}
+
+export function generateSVG(t, screenshots = {}, overlaysByVariant = {}) {
   const score = Number(pieScore(t));
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const W = 1200;
@@ -75,8 +120,9 @@ export function generateSVG(t, screenshots = {}) {
   const variantH = 500;
   const footerH  = 44;
   const controlY = metaY + metaH;
-  const variantY = controlY + controlH;
-  const footerY  = variantY + variantH;
+  const variants = t.variants ?? ["B"];
+  const variantsStartY = controlY + controlH;
+  const footerY  = variantsStartY + variants.length * variantH;
   const totalH   = footerY + footerH;
 
   const cardPadTop = META_TOP_BAR + 8;
@@ -189,16 +235,43 @@ export function generateSVG(t, screenshots = {}) {
   <text x="766" y="${controlY+54}" font-size="9" fill="#888" font-weight="700" letter-spacing="1.5">MOBILE</text>
   ${screenshotOrZone(screenshots.controlMobile, 762, controlY+62, 422, controlH-80, "CONTROL — MOBILE", "Mobile viewport screenshot")}
 
-  <!-- ══ VARIANT B ══ -->
-  <rect x="0" y="${variantY}" width="${W}" height="${variantH}" fill="#FFF" stroke="#DDE3ED" stroke-width="1"/>
-  <rect x="0" y="${variantY}" width="${W}" height="36" fill="#C9A84C"/>
-  <text x="20" y="${variantY+23}" font-size="10" fill="#FFF" font-weight="700" letter-spacing="2">VARIANT — VARIANT B</text>
-  <rect x="${W-34}" y="${variantY+9}" width="20" height="18" rx="4" fill="#FFF" opacity="0.15"/>
-  <text x="${W-24}" y="${variantY+22}" text-anchor="middle" font-size="11" fill="#FFF" font-weight="700">B</text>
-  <text x="20" y="${variantY+54}" font-size="9" fill="#888" font-weight="700" letter-spacing="1.5">DESKTOP</text>
-  ${screenshotOrZone(screenshots.variantDesktop, 16, variantY+62, 734, variantH-80, "VARIANT B — DESKTOP", "Full-page screenshot with changes")}
-  <text x="766" y="${variantY+54}" font-size="9" fill="#888" font-weight="700" letter-spacing="1.5">MOBILE</text>
-  ${screenshotOrZone(screenshots.variantMobile, 762, variantY+62, 422, variantH-80, "VARIANT B — MOBILE", "Mobile viewport with changes")}
+  <!-- ══ VARIANTS ══ -->
+  ${variants.map((label, i) => {
+    const vY = variantsStartY + i * variantH;
+    const color = VARIANT_COLORS[label] ?? "#C9A84C";
+    const keys = variantKeys(label);
+    const placements = overlaysByVariant[label] ?? [];
+    const noteLines_fn = (p) => p.note ? wrap(p.note, 28) : [];
+    return `
+  <rect x="0" y="${vY}" width="${W}" height="${variantH}" fill="#FFF" stroke="#DDE3ED" stroke-width="1"/>
+  <rect x="0" y="${vY}" width="${W}" height="36" fill="${color}"/>
+  <text x="20" y="${vY+23}" font-size="10" fill="#FFF" font-weight="700" letter-spacing="2">VARIANT — VARIANT ${escXml(label)}</text>
+  <rect x="${W-34}" y="${vY+9}" width="20" height="18" rx="4" fill="#FFF" opacity="0.15"/>
+  <text x="${W-24}" y="${vY+22}" text-anchor="middle" font-size="11" fill="#FFF" font-weight="700">${escXml(label)}</text>
+  <text x="20" y="${vY+54}" font-size="9" fill="#888" font-weight="700" letter-spacing="1.5">DESKTOP</text>
+  ${screenshotOrZone(screenshots[keys.desktop], 16, vY+62, 734, variantH-80, `VARIANT ${label} — DESKTOP`, "Full-page screenshot with changes")}
+  <text x="766" y="${vY+54}" font-size="9" fill="#888" font-weight="700" letter-spacing="1.5">MOBILE</text>
+  ${screenshotOrZone(screenshots[keys.mobile], 762, vY+62, 422, variantH-80, `VARIANT ${label} — MOBILE`, "Mobile viewport with changes")}
+  ${placements.map(p => {
+    const ox = Math.round(p.relX * W);
+    const oy = Math.round(p.relY * totalH);
+    const noteLines = noteLines_fn(p);
+    const calloutW = 170;
+    const calloutH = noteLines.length > 0 ? noteLines.length * 14 + 20 : 0;
+    const calloutX = ox + 18;
+    const calloutY = oy - calloutH / 2;
+    return [
+      `<circle cx="${ox}" cy="${oy}" r="13" fill="${p.color}" opacity="0.92" stroke="white" stroke-width="2.5"/>`,
+      `<text x="${ox}" y="${oy+4}" text-anchor="middle" font-size="10" fill="white" font-weight="800" font-family="Inter,Arial,sans-serif">${escXml(p.label[0])}</text>`,
+      noteLines.length > 0 ? [
+        `<line x1="${ox+13}" y1="${oy}" x2="${calloutX}" y2="${oy}" stroke="${p.color}" stroke-width="1.5" opacity="0.7"/>`,
+        `<rect x="${calloutX}" y="${calloutY}" width="${calloutW}" height="${calloutH}" rx="5" fill="${p.color}" opacity="0.9"/>`,
+        `<text x="${calloutX+8}" y="${calloutY+13}" font-size="8" fill="white" font-weight="700" font-family="Inter,Arial,sans-serif" opacity="0.75">${escXml(p.label.toUpperCase())}</text>`,
+        ...noteLines.map((l, ni) => `<text x="${calloutX+8}" y="${calloutY+13+(ni+1)*13}" font-size="10" fill="white" font-weight="500" font-family="Inter,Arial,sans-serif">${escXml(l)}</text>`),
+      ].join("\n") : "",
+    ].join("\n");
+  }).join("\n")}`;
+  }).join("\n")}
 
   <!-- ══ FOOTER ══ -->
   <rect x="0" y="${footerY}" width="${W}" height="${footerH}" fill="#1B3A6B"/>

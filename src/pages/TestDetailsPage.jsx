@@ -1,21 +1,30 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import ScreenshotZone from "../components/ScreenshotZone";
-import { generateSVG } from "../lib/svg";
+import FindingsEditor from "../components/FindingsEditor";
+import TestResults from "../components/TestResults";
+import { generateSVG, computeSVGZones } from "../lib/svg";
 import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis } from "../lib/utils";
-import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
+import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
-export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onSaveScreenshot, onClearScreenshot, clients }) {
+export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const test = tests.find(t => t.id === Number(id));
 
   const [svgPreviewOpen, setSvgPreviewOpen] = useState(false);
   const [svgPreviewZoom, setSvgPreviewZoom] = useState("fit");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [svgContent, setSvgContent] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [overlaysByVariant, setOverlaysByVariant] = useState(() => test?.overlays ?? {});
+  const [activeVariant, setActiveVariant] = useState("B");
+  const [editingOverlayId, setEditingOverlayId] = useState(null);
+  const [editingNote, setEditingNote] = useState("");
+  const [dragOverZone, setDragOverZone] = useState(null);
+  const [findingsEditing, setFindingsEditing] = useState(false);
 
   // Inline hypothesis builder state
   const [hypoEdit, setHypoEdit] = useState(false);
@@ -25,6 +34,31 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [aiError, setAiError] = useState("");
 
   const screenshots = screenshotsMap[Number(id)] || {};
+
+  const VARIANT_LETTERS = ["B","C","D","E","F","G","H"];
+  const VARIANT_COLORS_MAP = { B:"#C9A84C", C:"#2A8C8C", D:"#6D28D9", E:"#E74C3C", F:"#2ECC71", G:"#F39C12", H:"#E91E63" };
+  const variants = test?.variants ?? ["B"];
+  const activeOverlays = overlaysByVariant[activeVariant] ?? [];
+
+  function variantScreenshotKeys(label) {
+    return label === "B"
+      ? { desktop: "variantDesktop", mobile: "variantMobile" }
+      : { desktop: `variant${label}Desktop`, mobile: `variant${label}Mobile` };
+  }
+
+  const rebuildSvg = (byVariant) =>
+    setSvgContent(generateSVG(test, screenshotsMap[test?.id] || {}, byVariant));
+
+  const updateActiveOverlays = (updater) => {
+    setOverlaysByVariant(prev => {
+      const current = prev[activeVariant] ?? [];
+      const next = typeof updater === "function" ? updater(current) : updater;
+      const updated = { ...prev, [activeVariant]: next };
+      rebuildSvg(updated);
+      onUpdateTest(test.id, "overlays", updated);
+      return updated;
+    });
+  };
 
   // Load screenshots from IDB on mount
   useEffect(() => {
@@ -36,12 +70,12 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     });
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-render SVG preview when screenshots change
+  // Re-render SVG preview when screenshots or overlays change
   useEffect(() => {
     if (svgPreviewOpen && test) {
-      setSvgContent(generateSVG(test, screenshotsMap[test.id] || {}));
+      setSvgContent(generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant));
     }
-  }, [screenshotsMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [screenshotsMap, overlaysByVariant]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!test) { navigate("/"); return null; }
 
@@ -81,8 +115,34 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     setHypoEdit(false);
   };
 
+  const addVariant = () => {
+    const next = VARIANT_LETTERS[variants.length];
+    if (!next) return;
+    const newVariants = [...variants, next];
+    onUpdateTest(test.id, "variants", newVariants);
+  };
+
+  const removeVariant = (label) => {
+    if (variants.length <= 1) return;
+    const newVariants = variants.filter(v => v !== label);
+    onUpdateTest(test.id, "variants", newVariants);
+    setOverlaysByVariant(prev => { const n = { ...prev }; delete n[label]; rebuildSvg(n); onUpdateTest(test.id, "overlays", n); return n; });
+    if (activeVariant === label) setActiveVariant(newVariants[newVariants.length - 1]);
+  };
+
+  const svgForDisplay = (zoom) => {
+    // Strip XML declaration (invalid in inline HTML) and set width for zoom mode
+    let s = svgContent.replace(/^<\?xml[^?]*\?>\s*/i, "");
+    if (zoom === "fit") {
+      s = s
+        .replace(/(<svg\b[^>]*)\bwidth="[^"]*"/, '$1width="100%"')
+        .replace(/(<svg\b[^>]*)\bheight="[^"]*"/, "$1");
+    }
+    return s;
+  };
+
   const openPreview = () => {
-    setSvgContent(generateSVG(test, screenshotsMap[test.id] || {}));
+    setSvgContent(generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant));
     setSvgPreviewZoom("fit");
     setSvgPreviewOpen(true);
   };
@@ -91,7 +151,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     setPdfLoading(true);
     try {
       await makePdfFromSvg(
-        generateSVG(test, screenshotsMap[test.id] || {}),
+        generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant),
         `${test.testName || "test-hypothesis"}.pdf`
       );
     } catch (e) { console.error(e); }
@@ -99,7 +159,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   };
 
   const handleDownloadSVG = () => {
-    const svg = generateSVG(test, screenshotsMap[test.id] || {});
+    const svg = generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant);
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -117,28 +177,41 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         .srow{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid ${BORDER};font-size:13px;}
         .act-btn{border:none;border-radius:6px;padding:11px 18px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;width:100%;margin-bottom:8px;}
         @keyframes spin{to{transform:rotate(360deg);}}
+        .findings-view h2{font-size:17px;font-weight:800;margin:14px 0 6px;color:#0F1923;}
+        .findings-view h3{font-size:15px;font-weight:700;margin:12px 0 4px;color:#0F1923;}
+        .findings-view ul,.findings-view ol{padding-left:22px;margin:6px 0;}
+        .findings-view li{margin:3px 0;}
+        .findings-view p{margin:4px 0;}
+        .findings-view strong{font-weight:700;}
+        .findings-view em{font-style:italic;}
+        .findings-view u{text-decoration:underline;}
       `}</style>
 
-      <AppHeader right={
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => navigate("/")}
+      <AppHeader right={(() => {
+        const client = clients?.find(c => c.id === test.clientId);
+        return client ? (
+          <button onClick={() => navigate(`/clients/${client.id}`)}
             style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            ← All Tests
+            ← {client.name}
           </button>
-          <button onClick={() => navigate(`/tests/${id}/edit`)}
-            style={{ background: ACCENT, color: "#fff", border: "none", padding: "7px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            Edit Definition →
-          </button>
-        </div>
-      } />
+        ) : null;
+      })()} />
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 28px" }}>
         {/* Page title row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>
-              {test.testName || <span style={{ color: DIM, fontWeight: 400 }}>Untitled Test</span>}
-            </h1>
+          <div
+            onClick={() => navigate(`/tests/${id}/edit`)}
+            title="Edit definition"
+            style={{ cursor: "pointer", group: true }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h1 style={{ fontSize: 26, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>
+                {test.testName || <span style={{ color: DIM, fontWeight: 400 }}>Untitled Test</span>}
+              </h1>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: MUTED, flexShrink: 0, marginTop: 2 }}>
+                <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+              </svg>
+            </div>
             {test.pageUrl && (
               <div style={{ fontSize: 13, color: TEAL, fontWeight: 500, marginTop: 4 }}>{test.pageUrl}</div>
             )}
@@ -312,6 +385,59 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 </div>
               )}
             </div>
+
+            {/* Findings — only shown when Test Complete */}
+            {(test.status === "Test Complete") && (
+              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginTop: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Findings</div>
+                  {findingsEditing ? (
+                    <button
+                      onClick={() => setFindingsEditing(false)}
+                      style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                      Done
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setFindingsEditing(true)}
+                      style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                      ✎ Edit
+                    </button>
+                  )}
+                </div>
+                {findingsEditing ? (
+                  <FindingsEditor
+                    value={test.findings || ""}
+                    onChange={(html) => onUpdateTest(Number(id), "findings", html)}
+                  />
+                ) : (
+                  <div
+                    className="findings-view"
+                    dangerouslySetInnerHTML={{ __html: test.findings || "<p style='color:#9CA3AF;font-style:italic'>No findings written yet. Click Edit to add.</p>" }}
+                    style={{ fontSize: 14, color: TEXT, lineHeight: 1.8, fontFamily: "'Inter',sans-serif" }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Results — shown when Test Complete */}
+            {(test.status === "Test Complete") && (
+              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginTop: 16, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Results</div>
+                  {test.results && (
+                    <span style={{ fontSize: 11, color: "#15803D", fontWeight: 500, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "2px 9px" }}>
+                      {test.results.goals?.length} goals · {test.results.variantOrder?.length} variants
+                    </span>
+                  )}
+                </div>
+                <TestResults
+                  results={test.results ?? null}
+                  onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)}
+                  onClear={() => onUpdateTest(Number(id), "results", null)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Right column */}
@@ -358,6 +484,93 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 ))}
               </div>
             </div>
+
+            {/* Overlays */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 12 }}>Overlays</div>
+
+              {/* Variant tabs (only shown when multiple variants) */}
+              {variants.length > 1 && (
+                <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
+                  {variants.map(v => {
+                    const vc = VARIANT_COLORS_MAP[v] ?? "#C9A84C";
+                    const isActive = activeVariant === v;
+                    const count = (overlaysByVariant[v] ?? []).length;
+                    return (
+                      <button key={v} onClick={() => setActiveVariant(v)}
+                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 5, border: `1.5px solid ${isActive ? vc : BORDER}`, background: isActive ? vc : "transparent", color: isActive ? "#fff" : TEXT, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", transition: "all .15s" }}>
+                        {v}
+                        {count > 0 && (
+                          <span style={{ background: isActive ? "rgba(255,255,255,.25)" : vc, color: isActive ? "#fff" : "#fff", borderRadius: 8, padding: "0 5px", fontSize: 9, fontWeight: 800, lineHeight: "16px" }}>{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Placed overlays for active variant */}
+              {activeOverlays.length === 0 ? (
+                <div style={{ fontSize: 12, color: MUTED, textAlign: "center", padding: "16px 0", lineHeight: 1.5 }}>
+                  No overlays placed.<br/>
+                  <span style={{ fontSize: 11 }}>Open the SVG preview to drag overlays onto the template.</span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {activeOverlays.map(o => (
+                    <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 6, background: BG, border: `1px solid ${BORDER}` }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: o.color, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.label}</div>
+                        {o.note && <div style={{ fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 1.5, wordBreak: "break-word" }}>{o.note}</div>}
+                      </div>
+                      <button
+                        onClick={() => updateActiveOverlays(prev => prev.filter(x => x.id !== o.id))}
+                        title="Remove overlay"
+                        style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 14, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Overlay type legend */}
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Types</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {OVERLAY_TYPES.map(o => (
+                    <div key={o.label} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 4, background: BG, border: `1px solid ${BORDER}` }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: o.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, color: TEXT, whiteSpace: "nowrap" }}>{o.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Danger zone */}
+            <div style={{ marginTop: 16, padding: "14px 16px", border: `1.5px solid #FECACA`, borderRadius: 10, background: "#FFF8F8" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>Danger Zone</div>
+              {confirmDelete ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600, flex: 1 }}>This cannot be undone.</span>
+                  <button onClick={async () => { await onDeleteTest(Number(id)); navigate("/"); }}
+                    style={{ background: "#DC2626", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Confirm Delete
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)}
+                    style={{ background: "none", border: `1.5px solid #FECACA`, color: "#DC2626", padding: "6px 10px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)}
+                  style={{ width: "100%", background: "none", border: `1.5px solid #FECACA`, color: "#DC2626", padding: "8px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Delete Test
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -395,25 +608,300 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
           </div>
           <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
             <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
-              <img
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`}
-                alt="SVG template preview"
-                style={{ display: "block", width: svgPreviewZoom === "fit" ? "100%" : "1200px", maxWidth: svgPreviewZoom === "fit" ? "100%" : "none", height: "auto", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,.6)" }}
-              />
-            </div>
-            <div style={{ width: 230, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Screenshots</div>
-              {SCREENSHOT_ZONES.map(z => (
-                <ScreenshotZone
-                  key={z.key}
-                  label={z.label}
-                  sub={z.sub}
-                  value={screenshots[z.key] || null}
-                  onSet={(dataUrl) => onSaveScreenshot(Number(id), z.key, dataUrl)}
-                  onClear={() => onClearScreenshot(Number(id), z.key)}
+              <div
+                style={{ position: "relative", display: "inline-block", width: svgPreviewZoom === "fit" ? "100%" : "auto", minWidth: svgPreviewZoom === "fit" ? "100%" : 0 }}
+                onDragOver={e => e.preventDefault()}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
+                onDrop={e => {
+                  const moveId = e.dataTransfer.getData("overlayMove");
+                  const raw = e.dataTransfer.getData("overlayType");
+                  if (!raw) return;
+                  const ot = JSON.parse(raw);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const relX = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                  const relY = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+                  if (moveId) {
+                    updateActiveOverlays(prev => prev.map(x => x.id === Number(moveId) ? { ...x, relX, relY } : x));
+                  } else {
+                    updateActiveOverlays(prev => [...prev, { id: Date.now(), ...ot, relX, relY, note: "" }]);
+                  }
+                }}
+              >
+                <div
+                  dangerouslySetInnerHTML={{ __html: svgForDisplay(svgPreviewZoom) }}
+                  style={{ display: "block", lineHeight: 0, borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,.6)", overflow: "hidden" }}
                 />
-              ))}
-              <div style={{ marginTop: 8, fontSize: 10, color: "#3A5070", lineHeight: 1.7 }}>Screenshots persist via IndexedDB.</div>
+                {/* Screenshot drop zones */}
+                {test && (() => {
+                  const { W, totalH, zones } = computeSVGZones(test);
+                  return zones.map(zone => (
+                    <div
+                      key={zone.key}
+                      onDragEnter={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOverZone(zone.key); } }}
+                      onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); setDragOverZone(zone.key); } }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
+                      onDrop={e => {
+                        if (!e.dataTransfer.types.includes("Files")) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverZone(null);
+                        const file = e.dataTransfer.files[0];
+                        if (!file || !file.type.startsWith("image/")) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => onSaveScreenshot(Number(id), zone.key, ev.target.result);
+                        reader.readAsDataURL(file);
+                      }}
+                      style={{
+                        position: "absolute",
+                        left: `${(zone.x / W) * 100}%`,
+                        top: `${(zone.y / totalH) * 100}%`,
+                        width: `${(zone.w / W) * 100}%`,
+                        height: `${(zone.h / totalH) * 100}%`,
+                        borderRadius: 6,
+                        boxSizing: "border-box",
+                        background: dragOverZone === zone.key ? "rgba(42,140,140,0.25)" : "transparent",
+                        border: dragOverZone === zone.key ? "2px dashed #2A8C8C" : "2px solid transparent",
+                        transition: "background 0.15s, border-color 0.15s",
+                        zIndex: 5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        pointerEvents: "all",
+                      }}
+                    >
+                      {dragOverZone === zone.key && (
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#2A8C8C", background: "rgba(13,21,32,0.85)", padding: "8px 16px", borderRadius: 6, pointerEvents: "none", fontFamily: "'Inter',sans-serif" }}>
+                          Drop to set {zone.label}
+                        </div>
+                      )}
+                    </div>
+                  ));
+                })()}
+                {activeOverlays.map(p => (
+                  <Fragment key={p.id}>
+                    {/* Marker circle */}
+                    <div
+                      draggable
+                      onDragStart={e => {
+                        e.stopPropagation();
+                        if (editingOverlayId === p.id) { e.preventDefault(); return; }
+                        e.dataTransfer.setData("overlayMove", p.id.toString());
+                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color }));
+                      }}
+                      onClick={() => {
+                        setEditingNote(p.note || "");
+                        setEditingOverlayId(editingOverlayId === p.id ? null : p.id);
+                      }}
+                      title={`${p.label}${p.note ? `: ${p.note}` : ""} — drag to reposition · click to annotate`}
+                      style={{
+                        position: "absolute",
+                        left: `${p.relX * 100}%`,
+                        top: `${p.relY * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: 26,
+                        height: 26,
+                        borderRadius: "50%",
+                        background: p.color,
+                        border: `2.5px solid ${editingOverlayId === p.id ? "#fff" : "white"}`,
+                        outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: "#fff",
+                        cursor: "grab",
+                        boxShadow: "0 2px 10px rgba(0,0,0,.5)",
+                        zIndex: editingOverlayId === p.id ? 30 : 10,
+                        fontFamily: "'Inter',sans-serif",
+                        userSelect: "none",
+                      }}
+                    >
+                      {p.label[0]}
+                      {p.note && (
+                        <div style={{ position: "absolute", bottom: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: "white", border: `1.5px solid ${p.color}` }} />
+                      )}
+                    </div>
+
+                    {/* Annotation popover */}
+                    {editingOverlayId === p.id && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: `calc(${p.relX * 100}% + 20px)`,
+                          top: `${p.relY * 100}%`,
+                          transform: "translateY(-50%)",
+                          zIndex: 40,
+                          background: "#1A2540",
+                          border: `1.5px solid ${p.color}`,
+                          borderRadius: 8,
+                          padding: "12px 14px",
+                          minWidth: 220,
+                          boxShadow: "0 6px 24px rgba(0,0,0,.7)",
+                          fontFamily: "'Inter',sans-serif",
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div style={{ fontSize: 10, fontWeight: 700, color: p.color, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>{p.label}</div>
+                        <textarea
+                          autoFocus
+                          value={editingNote}
+                          onChange={e => setEditingNote(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              updateActiveOverlays(prev => prev.map(x => x.id === p.id ? { ...x, note: editingNote.trim() } : x));
+                              setEditingOverlayId(null);
+                            }
+                            if (e.key === "Escape") setEditingOverlayId(null);
+                          }}
+                          placeholder="Add annotation…"
+                          rows={2}
+                          style={{ width: "100%", background: "#0D1520", border: "1px solid #2E3F5C", borderRadius: 5, padding: "7px 9px", fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#C8D8EE", resize: "none", outline: "none", lineHeight: 1.5 }}
+                        />
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button
+                            onClick={() => {
+                              updateActiveOverlays(prev => prev.map(x => x.id === p.id ? { ...x, note: editingNote.trim() } : x));
+                              setEditingOverlayId(null);
+                            }}
+                            style={{ flex: 1, background: p.color, color: "#fff", border: "none", padding: "6px 0", borderRadius: 5, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingOverlayId(null)}
+                            style={{ background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "6px 10px", borderRadius: 5, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateActiveOverlays(prev => prev.filter(x => x.id !== p.id));
+                              setEditingOverlayId(null);
+                            }}
+                            style={{ background: "none", border: "1px solid #4A1A1A", color: "#DC2626", padding: "6px 10px", borderRadius: 5, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 9, color: "#3A5070" }}>Enter to save · Esc to cancel</div>
+                      </div>
+                    )}
+                  </Fragment>
+                ))}
+              </div>
+            </div>
+            <div style={{ width: 260, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
+
+              {/* Control screenshots */}
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Screenshots — Control</div>
+              <ScreenshotZone
+                label="Control"
+                sub="Desktop"
+                value={screenshots.controlDesktop || null}
+                onSet={(dataUrl) => onSaveScreenshot(Number(id), "controlDesktop", dataUrl)}
+                onClear={() => onClearScreenshot(Number(id), "controlDesktop")}
+              />
+              <div style={{ marginTop: 8 }}>
+                <ScreenshotZone
+                  label="Control"
+                  sub="Mobile"
+                  value={screenshots.controlMobile || null}
+                  onSet={(dataUrl) => onSaveScreenshot(Number(id), "controlMobile", dataUrl)}
+                  onClear={() => onClearScreenshot(Number(id), "controlMobile")}
+                />
+              </div>
+
+              {/* Screenshots for active variant */}
+              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
+                  Screenshots — Variant {activeVariant}
+                </div>
+                {(() => {
+                  const keys = variantScreenshotKeys(activeVariant);
+                  return (
+                    <>
+                      <ScreenshotZone
+                        label={`Variant ${activeVariant}`}
+                        sub="Desktop"
+                        value={screenshots[keys.desktop] || null}
+                        onSet={(dataUrl) => onSaveScreenshot(Number(id), keys.desktop, dataUrl)}
+                        onClear={() => onClearScreenshot(Number(id), keys.desktop)}
+                      />
+                      <div style={{ marginTop: 8 }}>
+                        <ScreenshotZone
+                          label={`Variant ${activeVariant}`}
+                          sub="Mobile"
+                          value={screenshots[keys.mobile] || null}
+                          onSet={(dataUrl) => onSaveScreenshot(Number(id), keys.mobile, dataUrl)}
+                          onClear={() => onClearScreenshot(Number(id), keys.mobile)}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Overlay Items */}
+              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Overlay Items — Variant {activeVariant}</div>
+                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 12 }}>Drag onto the variant view to annotate changes. Click a marker to remove it.</div>
+                {OVERLAY_TYPES.map(o => (
+                  <div
+                    key={o.label}
+                    draggable
+                    onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: o.label, color: o.color }))}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "7px 10px", borderRadius: 6,
+                      background: "#1A2540", border: "1px solid #2E3F5C",
+                      marginBottom: 6, cursor: "grab", userSelect: "none",
+                    }}
+                  >
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: o.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>{o.label}</span>
+                  </div>
+                ))}
+                {activeOverlays.length > 0 && (
+                  <button
+                    onClick={() => updateActiveOverlays([])}
+                    style={{ width: "100%", marginTop: 6, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "6px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Clear all ({activeOverlays.length})
+                  </button>
+                )}
+              </div>
+
+              {/* Variant tabs */}
+              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Variants</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {variants.map(v => (
+                    <div key={v} style={{ display: "flex", alignItems: "center", borderRadius: 6, overflow: "hidden", border: `1.5px solid ${activeVariant === v ? (VARIANT_COLORS_MAP[v] ?? "#C9A84C") : "#2E3F5C"}` }}>
+                      <button
+                        onClick={() => { setActiveVariant(v); setEditingOverlayId(null); }}
+                        style={{ padding: "5px 12px", background: activeVariant === v ? (VARIANT_COLORS_MAP[v] ?? "#C9A84C") : "#1A2540", color: "#fff", border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}
+                      >
+                        {v}
+                      </button>
+                      {variants.length > 1 && (
+                        <button
+                          onClick={() => removeVariant(v)}
+                          style={{ padding: "5px 7px", background: activeVariant === v ? (VARIANT_COLORS_MAP[v] ?? "#C9A84C") : "#1A2540", color: "rgba(255,255,255,.5)", border: "none", fontSize: 11, cursor: "pointer", fontFamily: "'Inter',sans-serif", borderLeft: "1px solid rgba(255,255,255,.15)" }}
+                          title={`Remove Variant ${v}`}
+                        >×</button>
+                      )}
+                    </div>
+                  ))}
+                  {variants.length < 7 && (
+                    <button
+                      onClick={addVariant}
+                      style={{ padding: "5px 12px", background: "#1A2540", border: "1.5px dashed #2E3F5C", color: "#5A7AAA", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}
+                    >+ Add</button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

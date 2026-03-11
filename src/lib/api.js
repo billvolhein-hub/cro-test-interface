@@ -31,13 +31,18 @@ export async function updateClient(id, name) {
   if (error) throw error;
 }
 
+export async function updateClientBrand(id, brand) {
+  const { error } = await supabase.from("clients").update({ brand }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteClient(id) {
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) throw error;
 }
 
 function rowToClient(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at };
+  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {} };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -97,7 +102,10 @@ function fieldToCol(field) {
   if (field === "secondaryMetrics") return "secondary_metrics";
   if (field === "updatedAt") return "updated_at";
   if (field === "createdAt") return "created_at";
-  return field; // potential, importance, ease, status, audience
+  if (field === "variants") return "variants";
+  if (field === "overlays") return "overlays";
+  if (field === "results") return "results";
+  return field; // potential, importance, ease, status, audience, findings
 }
 
 function testToRow(t) {
@@ -116,6 +124,10 @@ function testToRow(t) {
     page_url:          t.pageUrl ?? null,
     primary_metric:    t.primaryMetric ?? null,
     secondary_metrics: t.secondaryMetrics ?? [],
+    findings:          t.findings ?? null,
+    variants:          t.variants ?? ["B"],
+    overlays:          t.overlays ?? {},
+    results:           t.results ?? null,
     created_at:        t.createdAt ?? Date.now(),
     updated_at:        t.updatedAt ?? null,
   };
@@ -138,6 +150,10 @@ function rowToTest(row) {
     pageUrl:          row.page_url,
     primaryMetric:    row.primary_metric,
     secondaryMetrics: row.secondary_metrics ?? [],
+    findings:         row.findings ?? "",
+    variants:         row.variants ?? ["B"],
+    overlays:         row.overlays ?? {},
+    results:          row.results ?? null,
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
   };

@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import {
-  fetchClients, createClient, createClients, updateClient, deleteClient,
+  fetchClients, createClient, createClients, updateClient, updateClientBrand, deleteClient,
   fetchTests, createTest, createTests, updateTestField, replaceTest, deleteTest,
 } from "./lib/api";
 import HomePage from "./pages/HomePage";
 import TestDetailsPage from "./pages/TestDetailsPage";
 import TestDefinitionPage from "./pages/TestDefinitionPage";
+import ClientPage from "./pages/ClientPage";
 
 export default function App() {
   const [tests, setTests] = useState([]);
@@ -76,6 +77,11 @@ export default function App() {
   const onUpdateClient = async (id, name) => {
     setClients((prev) => prev.map((c) => (c.id === id ? { ...c, name: name.trim() } : c)));
     await updateClient(id, name);
+  };
+
+  const onUpdateClientBrand = async (id, brand) => {
+    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, brand } : c)));
+    await updateClientBrand(id, brand);
   };
 
   const onDeleteClient = async (id) => {
@@ -174,6 +180,7 @@ export default function App() {
               screenshotsMap={screenshotsMap}
               setScreenshotsMap={setScreenshotsMap}
               onUpdateTest={onUpdateTest}
+              onDeleteTest={onDeleteTest}
               onSaveScreenshot={onSaveScreenshot}
               onClearScreenshot={onClearScreenshot}
               clients={clients}
@@ -189,10 +196,21 @@ export default function App() {
               setScreenshotsMap={setScreenshotsMap}
               onUpdateTest={onUpdateTest}
               onReplaceTest={onReplaceTest}
+              onDeleteTest={onDeleteTest}
               onSaveScreenshot={onSaveScreenshot}
               onClearScreenshot={onClearScreenshot}
               clients={clients}
               onCreateClient={onCreateClient}
+            />
+          }
+        />
+        <Route
+          path="/clients/:id"
+          element={
+            <ClientPage
+              clients={clients}
+              tests={tests}
+              onUpdateClientBrand={onUpdateClientBrand}
             />
           }
         />

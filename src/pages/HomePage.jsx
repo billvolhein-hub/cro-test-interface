@@ -16,9 +16,14 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
   const [importError,      setImportError]      = useState("");
   const [activeClientId,   setActiveClientId]   = useState("all");
   const [clientsModalOpen, setClientsModalOpen] = useState(false);
-  const [expandedClients,  setExpandedClients]  = useState(new Set());
+  const [expandedCols,     setExpandedCols]     = useState(new Set());
   const [selectedIds,      setSelectedIds]      = useState(new Set());
   const [bulkConfirm,      setBulkConfirm]      = useState(false);
+  const [draggingId,       setDraggingId]       = useState(null);
+  const [dragOverStatus,   setDragOverStatus]   = useState(null);
+  const [expandedCards,    setExpandedCards]    = useState(new Set());
+
+  const toggleCard = (id, e) => { e.stopPropagation(); setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
 
   const PAGE_SIZE = 6;
 
@@ -42,9 +47,9 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
     selectedIds.forEach(id => onDeleteTest(id));
     clearSelection();
   };
-  const toggleExpand = (cid) => setExpandedClients(prev => {
+  const toggleExpand = (key) => setExpandedCols(prev => {
     const next = new Set(prev);
-    next.has(cid) ? next.delete(cid) : next.add(cid);
+    next.has(key) ? next.delete(key) : next.add(key);
     return next;
   });
   const csvRef = useRef(null);
@@ -141,7 +146,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
         .test-card.high-pie{border-color:#F59E0B;background:linear-gradient(135deg,#fff 85%,#FFFBEB 100%);}
         .test-card.high-pie:hover{border-color:#D97706;box-shadow:0 4px 16px rgba(245,158,11,.18);}
         .test-card.high-pie.selected{border-color:${ACCENT};background:#F5F8FF;}
-        .sel-cb{position:absolute;top:12px;left:12px;width:18px;height:18px;border-radius:4px;border:2px solid ${BORDER};background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;flex-shrink:0;}
+        .sel-cb{width:16px;height:16px;border-radius:4px;border:2px solid ${BORDER};background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;flex-shrink:0;}
         .sel-cb:hover{border-color:${ACCENT};}
         .sel-cb.checked{background:${ACCENT};border-color:${ACCENT};}
         .test-card:hover .sel-cb{border-color:${ACCENT};}
@@ -153,31 +158,27 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
         .imp-btn:hover{background:#F0F4FA;}
       `}</style>
 
-      <AppHeader right={
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button className="imp-btn" onClick={() => { setImportError(""); csvRef.current?.click(); }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 1v8M5 6l3 3 3-3" stroke={ACCENT} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Import CSV
-          </button>
-          <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
-            onChange={(e) => handleMassImport(e.target.files[0])} />
-          <button className="new-btn" onClick={handleNew}>
-            <span style={{ fontSize: 20, lineHeight: 1, marginTop: -1 }}>+</span> New Test
-          </button>
-        </div>
-      } />
+      <AppHeader />
+      <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+        onChange={(e) => handleMassImport(e.target.files[0])} />
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 28px 36px" }}>
+      <div style={{ padding: "28px 28px 36px", overflowX: "hidden" }}>
 
         {/* Client filter bar */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           {[{ id: "all", name: "All Clients" }, ...clients].map((c) => (
-            <button key={c.id} onClick={() => setActiveClientId(c.id)}
-              style={{ padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "1.5px solid", transition: "all .15s", borderColor: activeClientId === c.id ? ACCENT : BORDER, background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED }}>
-              {c.name}
-            </button>
+            <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 20, overflow: "hidden", border: "1.5px solid", transition: "all .15s", borderColor: activeClientId === c.id ? ACCENT : BORDER }}>
+              <button onClick={() => setActiveClientId(c.id)}
+                style={{ padding: "6px 14px", fontSize: 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", transition: "all .15s", background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED }}>
+                {c.name}
+              </button>
+              {c.id !== "all" && (
+                <button onClick={() => navigate(`/clients/${c.id}`)} title={`${c.name} portfolio`}
+                  style={{ padding: "6px 10px", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", borderLeft: `1px solid ${activeClientId === c.id ? "rgba(255,255,255,.3)" : BORDER}`, background: activeClientId === c.id ? "#142d54" : "#F7F8FA", color: activeClientId === c.id ? "rgba(255,255,255,.8)" : MUTED, transition: "all .15s" }}>
+                  ↗
+                </button>
+              )}
+            </div>
           ))}
           <button onClick={() => setClientsModalOpen(true)}
             style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: "none", border: `1.5px solid ${BORDER}`, color: MUTED }}>
@@ -202,6 +203,30 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
               {activeClientId === "all" && clients.length > 0 && ` across ${clients.length} client${clients.length !== 1 ? "s" : ""}`}
             </div>
           </div>
+          {activeClientId === "all" ? (
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button className="imp-btn" onClick={() => { setImportError(""); csvRef.current?.click(); }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 1v8M5 6l3 3 3-3" stroke={ACCENT} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Import CSV
+              </button>
+              <button className="new-btn" onClick={handleNew}>
+                <span style={{ fontSize: 20, lineHeight: 1, marginTop: -1 }}>+</span> New Test
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button onClick={() => navigate(`/clients/${activeClientId}`)}
+                style={{ background: ACCENT, color: "#fff", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                Client Portfolio →
+              </button>
+              <button onClick={() => setActiveClientId("all")}
+                style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                ← All Clients
+              </button>
+            </div>
+          )}
           {(() => {
             const scored = sorted.filter(t => t.potential || t.importance || t.ease);
             if (scored.length === 0) return null;
@@ -215,12 +240,6 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
               </div>
             );
           })()}
-          {activeClientId !== "all" && (
-            <button onClick={() => setActiveClientId("all")}
-              style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif", flexShrink: 0 }}>
-              ← All Clients
-            </button>
-          )}
         </div>
 
         {/* Import feedback */}
@@ -255,120 +274,159 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             <div style={{ fontSize: 13 }}>Try selecting a different client or <button onClick={() => setActiveClientId("all")} style={{ background: "none", border: "none", color: ACCENT, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontSize: 13, padding: 0 }}>view all</button>.</div>
           </div>
         ) : (() => {
-          // Build ordered groups: one per client present in `sorted`
-          const groups = [];
-          const seen = new Map();
-          sorted.forEach(t => {
-            const cid = resolveClientId(t);
-            if (!seen.has(cid)) { seen.set(cid, []); groups.push(cid); }
-            seen.get(cid).push(t);
-          });
-
           const renderCard = (t) => {
             const s = Number(pieScore(t));
             const st = statusStyle(t.status || DEFAULT_STATUS);
             const isSelected = selectedIds.has(t.id);
             const isHighPie = s >= 6.0;
+            const isDragging = draggingId === t.id;
+            const isExpanded = expandedCards.has(t.id);
             return (
-              <div key={t.id} className={`test-card${isSelected ? " selected" : ""}${isHighPie ? " high-pie" : ""}`}
+              <div key={t.id}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDraggingId(t.id); }}
+                onDragEnd={() => { setDraggingId(null); setDragOverStatus(null); }}
+                onDragOver={(e) => e.preventDefault()}
+                className={`test-card${isSelected ? " selected" : ""}${isHighPie ? " high-pie" : ""}`}
+                style={{ opacity: isDragging ? 0.4 : 1, cursor: "grab", padding: "10px 12px" }}
                 onClick={() => selectedIds.size > 0 ? toggleSelect(t.id, { stopPropagation: () => {} }) : navigate(`/tests/${t.id}`)}>
-                {/* Checkbox */}
-                <div className={`sel-cb${isSelected ? " checked" : ""}`}
-                  onClick={e => toggleSelect(t.id, e)}>
-                  {isSelected && (
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M1.5 5l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  )}
+
+                {/* Always-visible collapsed row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* Checkbox */}
+                  <div className={`sel-cb${isSelected ? " checked" : ""}`} style={{ position: "static", flexShrink: 0 }}
+                    onClick={e => toggleSelect(t.id, e)}>
+                    {isSelected && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+
+                  {/* Name */}
+                  <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {isHighPie && <span title="PIE ≥ 6.0" style={{ color: "#F59E0B", marginRight: 4 }}>★</span>}
+                    {t.testName || <span style={{ color: DIM, fontWeight: 400 }}>Untitled</span>}
+                  </div>
+
+                  {/* PIE badge */}
+                  <div style={{ background: scoreBg(s), border: `1.5px solid ${scoreBorder(s)}`, borderRadius: 5, padding: "2px 8px", textAlign: "center", flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: scoreColor(s), lineHeight: 1.2 }}>{pieScore(t)}</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, color: scoreColor(s), letterSpacing: 0.4 }}>PIE</div>
+                  </div>
+
+                  {/* Expand / delete */}
+                  <button onClick={e => toggleCard(t.id, e)} title={isExpanded ? "Collapse" : "Expand"}
+                    style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 12, lineHeight: 1, padding: "2px 4px", flexShrink: 0, transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</button>
+                  <button className="del-btn" onClick={(e) => { e.stopPropagation(); setConfirmDelete(t.id); }} title="Delete" style={{ fontSize: 14, padding: "1px 5px" }}>×</button>
                 </div>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14, paddingLeft: 26 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: TEXT, lineHeight: 1.3, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {t.testName || <span style={{ color: DIM, fontWeight: 400 }}>Untitled Test</span>}
-                    </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
                     {t.pageUrl && (
-                      <div style={{ fontSize: 11, color: TEAL, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.pageUrl}</div>
+                      <div style={{ fontSize: 11, color: TEAL, fontWeight: 500, marginBottom: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.pageUrl}</div>
                     )}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                    {isHighPie && (
-                      <div title="High priority — PIE ≥ 6.0" style={{ fontSize: 15, lineHeight: 1, color: "#F59E0B" }}>★</div>
+                    {t.if && (
+                      <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.6, marginBottom: 10, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        <span style={{ fontWeight: 700, color: ACCENT }}>If </span>{t.if}
+                      </div>
                     )}
-                    <div style={{ background: scoreBg(s), border: `1.5px solid ${scoreBorder(s)}`, borderRadius: 6, padding: "4px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: scoreColor(s), lineHeight: 1 }}>{pieScore(t)}</div>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: scoreColor(s), letterSpacing: 0.5 }}>PIE</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                      {t.testType      && <span style={{ fontSize: 11, fontWeight: 600, color: ACCENT, background: "#F0F4FA", border: `1px solid #C0CFEA`, borderRadius: 4, padding: "2px 7px" }}>{t.testType}</span>}
+                      {t.audience      && <span style={{ fontSize: 11, fontWeight: 600, color: MUTED,  background: BG,       border: `1px solid ${BORDER}`,   borderRadius: 4, padding: "2px 7px" }}>{t.audience}</span>}
+                      {t.primaryMetric && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,  background: "#F0FAFA", border: `1px solid #A8D8D8`,   borderRadius: 4, padding: "2px 7px" }}>{t.primaryMetric}</span>}
                     </div>
-                    <button className="del-btn" onClick={(e) => { e.stopPropagation(); setConfirmDelete(t.id); }} title="Delete test">×</button>
-                  </div>
-                </div>
-
-                <div style={{ paddingLeft: 26, marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, border: `1px solid ${st.border}`, borderRadius: 20, padding: "3px 10px", display: "inline-block" }}>
-                    {t.status || DEFAULT_STATUS}
-                  </span>
-                </div>
-
-                {t.if && (
-                  <div style={{ paddingLeft: 26, fontSize: 12, color: MUTED, lineHeight: 1.6, marginBottom: 12, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    <span style={{ fontWeight: 700, color: ACCENT }}>If </span>{t.if}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {PIE_CRITERIA.map(c => (
+                          <div key={c.key} style={{ fontSize: 11, fontWeight: 700, color: c.color }}>{c.label[0]}{t[c.key]}</div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, color: DIM }}>{t.updatedAt ? `Updated ${fmtDate(t.updatedAt)}` : fmtDate(t.createdAt)}</div>
+                    </div>
                   </div>
                 )}
-
-                <div style={{ paddingLeft: 26, display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                  {t.testType      && <span style={{ fontSize: 11, fontWeight: 600, color: ACCENT, background: "#F0F4FA", border: `1px solid #C0CFEA`, borderRadius: 4, padding: "2px 8px" }}>{t.testType}</span>}
-                  {t.audience      && <span style={{ fontSize: 11, fontWeight: 600, color: MUTED,  background: BG,       border: `1px solid ${BORDER}`,   borderRadius: 4, padding: "2px 8px" }}>{t.audience}</span>}
-                  {t.primaryMetric && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,  background: "#F0FAFA", border: `1px solid #A8D8D8`,   borderRadius: 4, padding: "2px 8px" }}>{t.primaryMetric}</span>}
-                </div>
-
-                <div style={{ paddingLeft: 26, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    {PIE_CRITERIA.map(c => (
-                      <div key={c.key} style={{ fontSize: 11, fontWeight: 700, color: c.color }}>{c.label[0]}{t[c.key]}</div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 11, color: DIM, fontWeight: 500 }}>
-                    {t.updatedAt ? `Updated ${fmtDate(t.updatedAt)}` : fmtDate(t.createdAt)}
-                  </div>
-                </div>
               </div>
             );
           };
 
-          return groups.map(cid => {
-            const group = seen.get(cid);
-            const clientName = clients.find(c => c.id === cid)?.name;
-            const isExpanded = expandedClients.has(cid);
-            const visible = isExpanded ? group : group.slice(0, PAGE_SIZE);
-            const hidden = group.length - PAGE_SIZE;
-            const showHeader = activeClientId === "all" && groups.length > 1;
+          // Kanban column definitions — merges statuses into display lanes
+          const LANES = [
+            { key: "backlog",  label: "Backlog",    statuses: ["Backlog"],                          dropStatus: "Backlog",         color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
+            { key: "inwork",   label: "In Work",    statuses: ["Under Review", "Promoted to Test"], dropStatus: "Under Review",    color: "#B45309", bg: "#FFFBEB", border: "#FDE68A" },
+            { key: "live",     label: "Live Tests",  statuses: ["Test Running"],                    dropStatus: "Test Running",    color: "#0E7490", bg: "#ECFEFF", border: "#A5F3FC" },
+          ];
 
+          const completed = sorted.filter(t => t.status === "Test Complete");
+
+          const handleDrop = (dropStatus) => {
+            if (draggingId === null) return;
+            const t = tests.find(x => x.id === draggingId);
+            if (t && (t.status || DEFAULT_STATUS) !== dropStatus) {
+              onUpdateTest(draggingId, "status", dropStatus);
+            }
+            setDraggingId(null);
+            setDragOverStatus(null);
+          };
+
+          const renderLane = (lane) => {
+            const col = sorted.filter(t => lane.statuses.includes(t.status || DEFAULT_STATUS));
+            const isExpanded = expandedCols.has(lane.key);
+            const visible = isExpanded ? col : col.slice(0, PAGE_SIZE);
+            const hidden = col.length - PAGE_SIZE;
+            const isDropTarget = dragOverStatus === lane.key && draggingId !== null;
             return (
-              <div key={cid} style={{ marginBottom: showHeader ? 32 : 0 }}>
-                {showHeader && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#6D28D9" }}>{clientName || "Unassigned"}</span>
-                    <span style={{ fontSize: 12, color: DIM, fontWeight: 500 }}>{group.length} test{group.length !== 1 ? "s" : ""}</span>
-                    <div style={{ flex: 1, height: 1, background: BORDER }} />
-                  </div>
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+              <div key={lane.key}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverStatus(lane.key); }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverStatus(null); }}
+                onDrop={() => handleDrop(lane.dropStatus)}
+                style={{ flex: 1, minWidth: 240, display: "flex", flexDirection: "column", borderRadius: 10, transition: "background .15s", background: isDropTarget ? lane.bg : "transparent", outline: isDropTarget ? `2px dashed ${lane.border}` : "2px dashed transparent", outlineOffset: 2 }}>
+                {/* Column header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "10px 14px", background: lane.bg, border: `1.5px solid ${isDropTarget ? lane.color : lane.border}`, borderRadius: 8, transition: "border-color .15s" }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: lane.color, letterSpacing: 1, textTransform: "uppercase", flex: 1 }}>{lane.label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: lane.color, background: "#fff", border: `1px solid ${lane.border}`, borderRadius: 10, padding: "1px 8px", minWidth: 22, textAlign: "center" }}>{col.length}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {visible.map(renderCard)}
                 </div>
                 {hidden > 0 && !isExpanded && (
-                  <button onClick={() => toggleExpand(cid)}
-                    style={{ marginTop: 14, width: "100%", background: "none", border: `1.5px dashed ${BORDER}`, color: MUTED, padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                    Show {hidden} more {clientName ? `${clientName} ` : ""}test{hidden !== 1 ? "s" : ""}
+                  <button onClick={() => toggleExpand(lane.key)} style={{ marginTop: 10, width: "100%", background: "none", border: `1.5px dashed ${lane.border}`, color: lane.color, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                    + {hidden} more
                   </button>
                 )}
-                {isExpanded && group.length > PAGE_SIZE && (
-                  <button onClick={() => toggleExpand(cid)}
-                    style={{ marginTop: 14, width: "100%", background: "none", border: `1.5px dashed ${BORDER}`, color: MUTED, padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                {isExpanded && col.length > PAGE_SIZE && (
+                  <button onClick={() => toggleExpand(lane.key)} style={{ marginTop: 10, width: "100%", background: "none", border: `1.5px dashed ${lane.border}`, color: lane.color, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
                     Show less
                   </button>
                 )}
+                {col.length === 0 && (
+                  <div style={{ padding: "32px 0", textAlign: "center", color: isDropTarget ? lane.color : DIM, fontSize: 12, border: `1.5px dashed ${isDropTarget ? lane.color : BORDER}`, borderRadius: 8, transition: "all .15s" }}>
+                    {isDropTarget ? "Drop to move here" : "No tests"}
+                  </div>
+                )}
               </div>
             );
-          });
+          };
+
+          return (
+            <>
+              {/* Kanban board */}
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: completed.length > 0 ? 32 : 0 }}>
+                {LANES.map(renderLane)}
+              </div>
+
+              {/* Test Complete section */}
+              {completed.length > 0 && (
+                <div style={{ borderTop: `2px solid #BBF7D0`, paddingTop: 24 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: "#15803D", letterSpacing: 1.2, textTransform: "uppercase" }}>✓ Test Complete</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "1px 8px" }}>{completed.length}</span>
+                    <div style={{ flex: 1, height: 1, background: "#BBF7D0" }} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10 }}>
+                    {completed.map(renderCard)}
+                  </div>
+                </div>
+              )}
+            </>
+          );
         })()}
       </div>
 

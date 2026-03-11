@@ -7,13 +7,14 @@ import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, makePdfFromSvg,
 import { TEST_TYPES, TEST_STATUSES, DEFAULT_STATUS, METRICS, AUDIENCES, PIE_CRITERIA, SCREENSHOT_ZONES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
-export default function TestDefinitionPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onReplaceTest, onSaveScreenshot, onClearScreenshot, clients, onCreateClient }) {
+export default function TestDefinitionPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onReplaceTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients, onCreateClient }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const testId = Number(id);
   const test = tests.find(t => t.id === testId);
 
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [activeHint, setActiveHint] = useState(null);
   const [aiStatement, setAiStatement] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -182,9 +183,19 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
       `}</style>
 
       <AppHeader right={
-        <button className="back-btn" onClick={() => navigate(`/tests/${id}`)}>
-          ← Test Details
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {(() => {
+            const client = clients?.find(c => c.id === test.clientId);
+            return client ? (
+              <button className="back-btn" onClick={() => navigate(`/clients/${client.id}`)}>
+                ← {client.name}
+              </button>
+            ) : null;
+          })()}
+          <button className="back-btn" onClick={() => navigate(`/tests/${id}`)}>
+            ← Test Details
+          </button>
+        </div>
       } />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", minHeight: "calc(100vh - 69px)" }}>
@@ -406,6 +417,29 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
               </div>
             ))}
           </div>
+
+          {/* Danger zone */}
+          <div style={{ marginTop: 32, padding: "14px 16px", border: `1.5px solid #FECACA`, borderRadius: 10, background: "#FFF8F8" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>Danger Zone</div>
+            {confirmDelete ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600, flex: 1 }}>This cannot be undone.</span>
+                <button onClick={async () => { await onDeleteTest(testId); navigate("/"); }}
+                  style={{ background: "#DC2626", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Confirm Delete
+                </button>
+                <button onClick={() => setConfirmDelete(false)}
+                  style={{ background: "none", border: `1.5px solid #FECACA`, color: "#DC2626", padding: "6px 10px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)}
+                style={{ width: "100%", background: "none", border: `1.5px solid #FECACA`, color: "#DC2626", padding: "8px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Delete Test
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right – preview + actions */}
@@ -461,20 +495,38 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
                 return <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, border: `1px solid ${st.border}`, borderRadius: 20, padding: "3px 10px" }}>{test.status || DEFAULT_STATUS}</span>;
               })()}
             </div>
-            {[
-              { label: "Client",    value: clients.find(c => c.id === test.clientId)?.name },
-              { label: "Test Name", value: test.testName },
-              { label: "Page",      value: test.pageUrl },
-              { label: "Type",      value: test.testType },
-              { label: "Audience",  value: test.audience },
-              { label: "Primary",   value: test.primaryMetric },
-              { label: "Secondary", value: (test.secondaryMetrics || []).join(", ") },
-            ].map(row => (
-              <div key={row.label} className="srow">
-                <span style={{ color: MUTED, fontWeight: 600, minWidth: 90 }}>{row.label}</span>
-                <span style={{ color: row.value ? TEXT : DIM, fontWeight: row.value ? 500 : 400 }}>{row.value || "—"}</span>
-              </div>
-            ))}
+            {(() => {
+              const pageVal = test.pageUrl || "";
+              let isQualifiedUrl = false;
+              try { isQualifiedUrl = Boolean(new URL(pageVal)); } catch {}
+              return [
+                { label: "Client",    value: clients.find(c => c.id === test.clientId)?.name },
+                { label: "Test Name", value: test.testName },
+                { label: "Page",      value: pageVal, isPage: true, isQualifiedUrl },
+                { label: "Type",      value: test.testType },
+                { label: "Audience",  value: test.audience },
+                { label: "Primary",   value: test.primaryMetric },
+                { label: "Secondary", value: (test.secondaryMetrics || []).join(", ") },
+              ].map(row => (
+                <div key={row.label} className="srow">
+                  <span style={{ color: MUTED, fontWeight: 600, minWidth: 90 }}>{row.label}</span>
+                  {row.isPage ? (
+                    row.isQualifiedUrl ? (
+                      <a href={row.value} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        style={{ color: TEAL, fontWeight: 600, fontSize: 13, textDecoration: "none", background: "#F0FAFA", border: `1px solid #A8D8D8`, borderRadius: 5, padding: "2px 10px", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        View Page
+                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M10 2H5M10 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </a>
+                    ) : (
+                      <span style={{ color: row.value ? TEXT : DIM, fontWeight: row.value ? 500 : 400 }}>{row.value || "—"}</span>
+                    )
+                  ) : (
+                    <span style={{ color: row.value ? TEXT : DIM, fontWeight: row.value ? 500 : 400 }}>{row.value || "—"}</span>
+                  )}
+                </div>
+              ));
+            })()}
           </div>
 
           <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 8, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,.07)" }}>
