@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 import AppHeader from "../components/AppHeader";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
@@ -72,11 +73,22 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
     finally { setSaving(false); }
   };
 
-  const readFile = (file, key) => {
+  const readFile = async (file, key) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => setDraft(d => ({ ...d, [key]: e.target.result }));
-    reader.readAsDataURL(file);
+    const ext = file.name.split(".").pop();
+    const path = `clients/${clientId}/${key}.${ext}`;
+    const { error } = await supabase.storage
+      .from("screenshots")
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (error) {
+      // Fallback to base64 if upload fails
+      const reader = new FileReader();
+      reader.onload = e => setDraft(d => ({ ...d, [key]: e.target.result }));
+      reader.readAsDataURL(file);
+      return;
+    }
+    const { data: { publicUrl } } = supabase.storage.from("screenshots").getPublicUrl(path);
+    setDraft(d => ({ ...d, [key]: publicUrl }));
   };
 
   // Use live draft when editing, saved brand otherwise
