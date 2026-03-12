@@ -221,3 +221,202 @@ Rules:
   if (!parsed.if || !parsed.then || !parsed.because) throw new Error("Unexpected response shape from API.");
   return parsed;
 }
+
+export async function generateFindings(results, testContext = {}) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("VITE_ANTHROPIC_API_KEY is not set in your .env file.");
+
+  const goalLines = results.goals.map(goal => {
+    const control = goal.rows.find(r => r.variant === results.variantOrder[0]);
+    const variants = goal.rows.filter(r => r.variant !== results.variantOrder[0]);
+    const variantLines = variants.map(v =>
+      `  - ${v.variant}: ${v.rate.toFixed(2)}% (${v.change >= 0 ? "+" : ""}${v.change.toFixed(2)}% change, ${v.confidence.toFixed(1)}% confidence)`
+    ).join("\n");
+    return `Goal: ${goal.name}\n  Control (${control?.variant}): ${control?.rate.toFixed(2)}%\n${variantLines}`;
+  }).join("\n\n");
+
+  const prompt = `You are a senior CRO analyst writing a professional test findings report. Based on the A/B test results below, write a clear, insightful findings summary.
+
+Test: ${testContext.testName || "A/B Test"}
+${testContext.pageUrl ? `Page: ${testContext.pageUrl}` : ""}
+Period: ${results.startDate} to ${results.endDate}
+Total visitors: ${results.variantOrder.reduce((s, v) => { const r = results.goals[0]?.rows.find(x => x.variant === v); return s + (r?.visitors ?? 0); }, 0).toLocaleString()}
+Variants tested: ${results.variantOrder.join(", ")}
+
+Results by goal:
+${goalLines}
+
+Statistical significance guide: ≥95% = statistically significant, 80–94% = trending, <80% = inconclusive.
+
+Write the findings as HTML using only these tags: <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>.
+Structure:
+1. <h2>Summary</h2> — 2–3 sentence executive summary of what was tested and the headline result
+2. <h2>Results by Goal</h2> — for each goal, use <h3> for the goal name, then describe results including direction, magnitude, and whether they are statistically significant
+3. <h2>Recommendation</h2> — clear action recommendation based on the data
+
+Rules:
+- Be precise — cite specific percentages and confidence levels
+- Distinguish clearly between statistically significant results and inconclusive ones
+- Do not use the word "significant" unless confidence is ≥95%
+- Return ONLY the HTML, no markdown fences, no commentary`;
+
+  const res = await fetch("/anthropic/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `API error ${res.status}`);
+  }
+
+  const data = await res.json();
+  const html = data.content?.[0]?.text?.trim() ?? "";
+  if (!html) throw new Error("Empty response from API.");
+  return html;
+}
+
+// ── Convert.com API ───────────────────────────────────────────────────────────
+
+async function hmacSha256Hex(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function convertHeaders(appId, appSecret, targetUrl, body) {
+  const expires = Math.floor(Date.now() / 1000) + 300; // 5 min window
+  const bodyStr = body ? JSON.stringify(body) : "";
+  const signString = [appId, expires, targetUrl, bodyStr].join("\n");
+  const signature = await hmacSha256Hex(appSecret, signString);
+  return {
+    "Convert-Application-ID": appId,
+    "Expires": String(expires),
+    "Authorization": `Convert-HMAC-SHA256 Signature=${signature}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+}
+
+function parseConvertReport(reportData, goalNames, variationsData, experienceId) {
+  // variationsData: array of { id, name, is_baseline }
+  // reportData: array of { goal_id, variations: [{ id, visitors, conversion_data }] }
+
+  const varById = Object.fromEntries(variationsData.map(v => [v.id, v.name]));
+
+  // Baseline first, then challengers
+  const variantOrder = [
+    ...variationsData.filter(v => v.is_baseline),
+    ...variationsData.filter(v => !v.is_baseline),
+  ].map(v => v.name);
+
+  const goals = reportData.map(goalEntry => {
+    const goalId   = goalEntry.goal_id;
+    const goalName = goalNames[goalId] ?? `Goal ${goalId}`;
+
+    const rows = goalEntry.variations.map(v => {
+      const cd = v.conversion_data;
+      const name        = varById[v.id] ?? String(v.id);
+      const isBaseline  = variationsData.find(x => x.id === v.id)?.is_baseline ?? false;
+      const visitors    = Number(v.visitors ?? 0);
+      const conversions = Number(cd.conversions ?? 0);
+      const rate        = Number(cd.conversion_rate ?? 0);          // already %
+      const change      = isBaseline ? 0 : Number(cd.conversion_rate_change ?? 0) * 100; // decimal → %
+      const confidence  = Number(cd.confidence ?? 0);               // already %
+      return { variant: name, visitors, conversions, rate, change, confidence };
+    });
+
+    // Ensure baseline is first
+    rows.sort((a, b) => {
+      const ai = variantOrder.indexOf(a.variant);
+      const bi = variantOrder.indexOf(b.variant);
+      return ai - bi;
+    });
+
+    return { name: goalName, rows };
+  });
+
+  return { variantOrder, goals };
+}
+
+export async function fetchConvertResults(experienceId) {
+  const appId     = import.meta.env.VITE_CONVERT_API_KEY;
+  const appSecret = import.meta.env.VITE_CONVERT_API_SECRET;
+  const accountId = import.meta.env.VITE_CONVERT_ACCOUNT_ID;
+  const projectId = import.meta.env.VITE_CONVERT_PROJECT_ID;
+
+  if (!appId || !appSecret)
+    throw new Error("Add VITE_CONVERT_API_KEY and VITE_CONVERT_API_SECRET to your .env file.");
+  if (!accountId || !projectId)
+    throw new Error("Add VITE_CONVERT_ACCOUNT_ID and VITE_CONVERT_PROJECT_ID to your .env file.");
+
+  const base = `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}`;
+  const proxyBase = `/convert/api/v2/accounts/${accountId}/projects/${projectId}`;
+
+  // ── 1. Fetch goal names ───────────────────────────────────────────────────
+  const goalsTarget = `${base}/goals`;
+  const goalsHeaders = await convertHeaders(appId, appSecret, goalsTarget, null);
+  const goalsRes = await fetch(`${proxyBase}/goals`, { headers: goalsHeaders });
+  let goalNames = {};
+  if (goalsRes.ok) {
+    const gd = await goalsRes.json();
+    const list = gd?.data ?? gd ?? [];
+    if (Array.isArray(list)) {
+      goalNames = Object.fromEntries(list.map(g => [g.id, g.name]));
+    }
+  }
+  // If goals fetch fails we'll fall back to IDs — non-fatal
+
+  // ── 2. Fetch aggregated report ────────────────────────────────────────────
+  const reportTarget = `${base}/experiences/${experienceId}/aggregated_report`;
+  const reportBody   = {};
+  const reportHeaders = await convertHeaders(appId, appSecret, reportTarget, reportBody);
+
+  const reportRes = await fetch(
+    `${proxyBase}/experiences/${experienceId}/aggregated_report`,
+    { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
+  );
+
+  if (!reportRes.ok) {
+    const err = await reportRes.json().catch(() => ({}));
+    throw new Error(err?.message ?? err?.error ?? `Convert API ${reportRes.status}`);
+  }
+
+  const raw = await reportRes.json();
+  const inner = raw?.data ?? raw;
+
+  if (!inner?.reportData || !inner?.variations_data) {
+    throw Object.assign(
+      new Error("Unexpected response shape — could not find goal/variant data."),
+      { raw }
+    );
+  }
+
+  const { variantOrder, goals } = parseConvertReport(
+    inner.reportData, goalNames, inner.variations_data, experienceId
+  );
+
+  return {
+    convertExperienceId: String(experienceId),
+    testId:    String(experienceId),
+    testName:  "",
+    startDate: "",
+    endDate:   "",
+    syncedAt:  new Date().toISOString(),
+    variantOrder,
+    goals,
+  };
+}

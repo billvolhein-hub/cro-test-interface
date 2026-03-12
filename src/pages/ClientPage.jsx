@@ -194,24 +194,31 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
             <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.45)", borderRadius: "inherit" }} />
           )}
           <div style={{ position: "relative", zIndex: 1 }}>
-            {/* Top row: logo + edit button */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+            {/* Pencil edit button — top-right corner */}
+            <button
+              onClick={editing ? cancelEdit : openEdit}
+              title={editing ? "Cancel" : "Edit brand"}
+              style={{ position: "absolute", top: 0, right: 0, width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.28)", color: activeBrand.textColor, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", padding: 0, flexShrink: 0 }}
+            >
+              {editing ? (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 11L11 1M1 1l10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M8 4l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              )}
+            </button>
+
+            {/* Top row: text left, logo right */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, paddingRight: 44 }}>
               <div>
-                {activeBrand.logoUrl && (
-                  <img src={activeBrand.logoUrl} alt="Logo" style={{ maxHeight: 48, maxWidth: 180, objectFit: "contain", marginBottom: 12, display: "block" }} />
-                )}
                 <div style={{ fontSize: 10, fontWeight: 700, color: `${activeBrand.textColor}99`, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Client Portfolio</div>
                 <div style={{ fontSize: 32, fontWeight: 800, color: activeBrand.textColor, lineHeight: 1.1 }}>{client.name}</div>
                 {activeBrand.tagline && (
                   <div style={{ fontSize: 14, color: `${activeBrand.textColor}CC`, fontWeight: 500, marginTop: 6 }}>{activeBrand.tagline}</div>
                 )}
               </div>
-              <button
-                onClick={editing ? cancelEdit : openEdit}
-                style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.25)", color: activeBrand.textColor, padding: "7px 14px", borderRadius: 7, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, backdropFilter: "blur(4px)" }}
-              >
-                {editing ? "✕ Cancel" : "✎ Edit Brand"}
-              </button>
+              {activeBrand.logoUrl && (
+                <img src={activeBrand.logoUrl} alt="Logo" style={{ maxHeight: 56, maxWidth: 200, objectFit: "contain", flexShrink: 0, marginLeft: 24, marginTop: 2 }} />
+              )}
             </div>
 
             {/* Stats */}

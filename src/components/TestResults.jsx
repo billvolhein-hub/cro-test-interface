@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { CARD, BORDER, BG, TEXT, MUTED, TEAL, ACCENT, GOLD } from "../lib/constants";
+import { fetchConvertResults } from "../lib/utils";
 
 // ── CSV Parser ────────────────────────────────────────────────────────────────
 
@@ -156,10 +157,81 @@ function GoalCard({ goal, variantOrder }) {
   );
 }
 
+// ── Convert sync panel ────────────────────────────────────────────────────────
+
+function ConvertSyncPanel({ convertId, setConvertId, onSync, loading, error, raw, lastSynced }) {
+  return (
+    <div style={{ background: BG, border: `1.5px solid ${BORDER}`, borderRadius: 8, padding: "14px 16px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: TEAL }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>Sync from Convert.com API</span>
+        {lastSynced && (
+          <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>
+            Last synced {new Date(lastSynced).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={convertId}
+          onChange={e => setConvertId(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !loading) onSync(); }}
+          placeholder="Convert.com Experience ID (e.g. 100136426)"
+          style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
+        />
+        <button
+          onClick={onSync}
+          disabled={loading || !convertId.trim()}
+          style={{ background: TEAL, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: loading || !convertId.trim() ? "not-allowed" : "pointer", opacity: loading || !convertId.trim() ? 0.7 : 1, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+          {loading ? (
+            <><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.4)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Syncing…</>
+          ) : "Sync"}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ marginTop: 10, fontSize: 12, color: "#DC2626", background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 6, padding: "8px 12px" }}>
+          <strong>Error:</strong> {error}
+          {raw && (
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontSize: 11, color: MUTED }}>Show raw API response</summary>
+              <pre style={{ marginTop: 6, fontSize: 10, color: MUTED, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{JSON.stringify(raw, null, 2)}</pre>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function TestResults({ results, onImport, onClear }) {
   const fileRef = useRef();
+  const [convertId, setConvertId] = useState(results?.convertExperienceId ?? "");
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [convertError, setConvertError] = useState("");
+  const [convertRaw, setConvertRaw] = useState(null);
+  const [showConvertPanel, setShowConvertPanel] = useState(false);
+
+  const handleConvertSync = async () => {
+    const expId = convertId.trim();
+    if (!expId) return;
+    setConvertLoading(true);
+    setConvertError("");
+    setConvertRaw(null);
+    try {
+      const parsed = await fetchConvertResults(expId);
+      onImport(parsed);
+      setShowConvertPanel(false);
+    } catch (e) {
+      setConvertError(e.message);
+      if (e.raw) setConvertRaw(e.raw);
+    } finally {
+      setConvertLoading(false);
+    }
+  };
 
   const handleFile = (file) => {
     if (!file) return;
@@ -183,18 +255,38 @@ export default function TestResults({ results, onImport, onClear }) {
 
   if (!results) {
     return (
-      <div
-        onDragOver={e => e.preventDefault()}
-        onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
-        style={{ border: `2px dashed ${BORDER}`, borderRadius: 8, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: BG, transition: "border-color .15s" }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = TEAL}
-        onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}
-      >
-        <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
-        <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 4 }}>Import Convert.com results</div>
-        <div style={{ fontSize: 11, color: MUTED }}>Drop a CSV file here or click to browse</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* CSV drop zone */}
+        <div
+          onDragOver={e => e.preventDefault()}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{ border: `2px dashed ${BORDER}`, borderRadius: 8, padding: "22px 20px", textAlign: "center", cursor: "pointer", background: BG, transition: "border-color .15s" }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = TEAL}
+          onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}
+        >
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
+          <div style={{ fontSize: 20, marginBottom: 6 }}>📄</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 3 }}>Import CSV export</div>
+          <div style={{ fontSize: 11, color: MUTED }}>Drop a Convert.com CSV here or click to browse</div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ flex: 1, height: 1, background: BORDER }} />
+          <span style={{ fontSize: 11, color: MUTED, fontWeight: 600 }}>or</span>
+          <div style={{ flex: 1, height: 1, background: BORDER }} />
+        </div>
+
+        {/* Convert API sync */}
+        <ConvertSyncPanel
+          convertId={convertId}
+          setConvertId={setConvertId}
+          onSync={handleConvertSync}
+          loading={convertLoading}
+          error={convertError}
+          raw={convertRaw}
+        />
       </div>
     );
   }
@@ -235,12 +327,17 @@ export default function TestResults({ results, onImport, onClear }) {
         ))}
       </div>
 
-      {/* Replace / clear */}
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+      {/* Footer actions */}
+      <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+        <button
+          onClick={() => setShowConvertPanel(p => !p)}
+          style={{ flex: 1, background: showConvertPanel ? ACCENT : "none", border: `1.5px solid ${showConvertPanel ? ACCENT : BORDER}`, color: showConvertPanel ? "#fff" : MUTED, padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          {results.convertExperienceId ? "↻ Re-sync Convert" : "⟳ Sync from Convert"}
+        </button>
         <button
           onClick={() => fileRef.current?.click()}
-          style={{ flex: 1, background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-          Replace CSV
+          style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+          CSV
         </button>
         <button
           onClick={onClear}
@@ -249,6 +346,20 @@ export default function TestResults({ results, onImport, onClear }) {
         </button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
       </div>
+
+      {showConvertPanel && (
+        <div style={{ marginTop: 12 }}>
+          <ConvertSyncPanel
+            convertId={convertId}
+            setConvertId={setConvertId}
+            onSync={handleConvertSync}
+            loading={convertLoading}
+            error={convertError}
+            raw={convertRaw}
+            lastSynced={results.syncedAt}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/anthropic/, ""),
       },
+      "/convert": {
+        target: "https://api.convert.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/convert/, ""),
+      },
     },
   },
 });

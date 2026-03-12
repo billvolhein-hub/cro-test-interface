@@ -5,7 +5,15 @@ import ScreenshotZone from "../components/ScreenshotZone";
 import FindingsEditor from "../components/FindingsEditor";
 import TestResults from "../components/TestResults";
 import { generateSVG, computeSVGZones } from "../lib/svg";
-import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis } from "../lib/utils";
+
+function zoneForOverlay(overlay, test) {
+  if (!test) return null;
+  const { W, totalH, zones } = computeSVGZones(test);
+  const px = overlay.relX * W;
+  const py = overlay.relY * totalH;
+  return zones.find(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) ?? null;
+}
+import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis, generateFindings } from "../lib/utils";
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
@@ -25,6 +33,8 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [editingNote, setEditingNote] = useState("");
   const [dragOverZone, setDragOverZone] = useState(null);
   const [findingsEditing, setFindingsEditing] = useState(false);
+  const [findingsAiLoading, setFindingsAiLoading] = useState(false);
+  const [findingsAiError, setFindingsAiError] = useState("");
 
   // Inline hypothesis builder state
   const [hypoEdit, setHypoEdit] = useState(false);
@@ -107,6 +117,21 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
       setAiLoading(false);
     }
   };
+  const handleAiFindings = async () => {
+    if (!test.results) return;
+    setFindingsAiLoading(true);
+    setFindingsAiError("");
+    try {
+      const html = await generateFindings(test.results, { testName: test.testName, pageUrl: test.pageUrl });
+      await onUpdateTest(Number(id), "findings", html);
+      setFindingsEditing(false);
+    } catch (e) {
+      setFindingsAiError(e.message);
+    } finally {
+      setFindingsAiLoading(false);
+    }
+  };
+
   const saveHypo = () => {
     const testId = Number(id);
     if (draft.if      !== test.if)      onUpdateTest(testId, "if",      draft.if);
@@ -242,6 +267,53 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
           {/* Left column */}
           <div>
+            {/* Findings — top of column when Test Complete */}
+            {(test.status === "Test Complete") && (
+              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Findings</div>
+                  {test.results && !findingsEditing && (
+                    <button
+                      onClick={handleAiFindings}
+                      disabled={findingsAiLoading}
+                      style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#fff", background: findingsAiLoading ? "#6B7280" : ACCENT, border: "none", borderRadius: 5, padding: "4px 10px", cursor: findingsAiLoading ? "wait" : "pointer", fontFamily: "'Inter',sans-serif", opacity: findingsAiLoading ? 0.8 : 1 }}>
+                      {findingsAiLoading ? (
+                        <><svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.4)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
+                      ) : <>✦ AI Populate</>}
+                    </button>
+                  )}
+                  {findingsEditing ? (
+                    <button onClick={() => setFindingsEditing(false)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Done</button>
+                  ) : (
+                    <button onClick={() => setFindingsEditing(true)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>✎ Edit</button>
+                  )}
+                </div>
+                {findingsAiError && (
+                  <div style={{ marginBottom: 12, fontSize: 12, color: "#DC2626", background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 6, padding: "8px 12px" }}>{findingsAiError}</div>
+                )}
+                {findingsEditing ? (
+                  <FindingsEditor value={test.findings || ""} onChange={(html) => onUpdateTest(Number(id), "findings", html)} />
+                ) : (
+                  <div className="findings-view" dangerouslySetInnerHTML={{ __html: test.findings || "<p style='color:#9CA3AF;font-style:italic'>No findings written yet. Click Edit to add, or use AI Populate if results are uploaded.</p>" }} style={{ fontSize: 14, color: TEXT, lineHeight: 1.8, fontFamily: "'Inter',sans-serif" }} />
+                )}
+              </div>
+            )}
+
+            {/* Results — top of column when Test Complete */}
+            {(test.status === "Test Complete") && (
+              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Results</div>
+                  {test.results && (
+                    <span style={{ fontSize: 11, color: "#15803D", fontWeight: 500, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "2px 9px" }}>
+                      {test.results.goals?.length} goals · {test.results.variantOrder?.length} variants
+                    </span>
+                  )}
+                </div>
+                <TestResults results={test.results ?? null} onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)} onClear={() => onUpdateTest(Number(id), "results", null)} />
+              </div>
+            )}
+
             {/* Hypothesis */}
             {(() => {
               const incomplete = !test.if || !test.then || !test.because;
@@ -386,58 +458,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               )}
             </div>
 
-            {/* Findings — only shown when Test Complete */}
-            {(test.status === "Test Complete") && (
-              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginTop: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Findings</div>
-                  {findingsEditing ? (
-                    <button
-                      onClick={() => setFindingsEditing(false)}
-                      style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                      Done
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setFindingsEditing(true)}
-                      style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                      ✎ Edit
-                    </button>
-                  )}
-                </div>
-                {findingsEditing ? (
-                  <FindingsEditor
-                    value={test.findings || ""}
-                    onChange={(html) => onUpdateTest(Number(id), "findings", html)}
-                  />
-                ) : (
-                  <div
-                    className="findings-view"
-                    dangerouslySetInnerHTML={{ __html: test.findings || "<p style='color:#9CA3AF;font-style:italic'>No findings written yet. Click Edit to add.</p>" }}
-                    style={{ fontSize: 14, color: TEXT, lineHeight: 1.8, fontFamily: "'Inter',sans-serif" }}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Results — shown when Test Complete */}
-            {(test.status === "Test Complete") && (
-              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginTop: 16, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Results</div>
-                  {test.results && (
-                    <span style={{ fontSize: 11, color: "#15803D", fontWeight: 500, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "2px 9px" }}>
-                      {test.results.goals?.length} goals · {test.results.variantOrder?.length} variants
-                    </span>
-                  )}
-                </div>
-                <TestResults
-                  results={test.results ?? null}
-                  onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)}
-                  onClear={() => onUpdateTest(Number(id), "results", null)}
-                />
-              </div>
-            )}
           </div>
 
           {/* Right column */}
@@ -517,21 +537,25 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {activeOverlays.map(o => (
-                    <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 6, background: BG, border: `1px solid ${BORDER}` }}>
-                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: o.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.label}</div>
-                        {o.note && <div style={{ fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 1.5, wordBreak: "break-word" }}>{o.note}</div>}
+                  {activeOverlays.map(o => {
+                    const zone = zoneForOverlay(o, test);
+                    return (
+                      <div key={o.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", borderRadius: 6, background: BG, border: `1px solid ${BORDER}` }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: o.color, flexShrink: 0, marginTop: 3 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{zone ? zone.label : "Unpositioned"}</div>
+                          <div style={{ fontSize: 10, color: o.color, fontWeight: 600, marginTop: 2 }}>{o.label}</div>
+                          {o.note && <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.5, wordBreak: "break-word" }}>{o.note}</div>}
+                        </div>
+                        <button
+                          onClick={() => updateActiveOverlays(prev => prev.filter(x => x.id !== o.id))}
+                          title="Remove overlay"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 14, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
+                          ×
+                        </button>
                       </div>
-                      <button
-                        onClick={() => updateActiveOverlays(prev => prev.filter(x => x.id !== o.id))}
-                        title="Remove overlay"
-                        style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 14, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
