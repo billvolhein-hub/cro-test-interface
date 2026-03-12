@@ -87,6 +87,12 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     }
   }, [screenshotsMap, overlaysByVariant]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lock body scroll while preview modal is open
+  useEffect(() => {
+    document.body.style.overflow = svgPreviewOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [svgPreviewOpen]);
+
   if (!test) { navigate("/"); return null; }
 
   const score = Number(pieScore(test));
@@ -631,9 +637,9 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
             </button>
           </div>
           <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-            <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
+            <div style={{ flex: 1, overflow: "auto", padding: "20px", boxSizing: "border-box" }}>
               <div
-                style={{ position: "relative", display: "inline-block", width: svgPreviewZoom === "fit" ? "100%" : "auto", minWidth: svgPreviewZoom === "fit" ? "100%" : 0 }}
+                style={{ position: "relative", display: "block", width: svgPreviewZoom === "fit" ? "100%" : "max-content" }}
                 onDragOver={e => e.preventDefault()}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
                 onDrop={e => {
