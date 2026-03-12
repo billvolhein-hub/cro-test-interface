@@ -128,6 +128,7 @@ function testToRow(t) {
     variants:          t.variants ?? ["B"],
     overlays:          t.overlays ?? {},
     results:           t.results ?? null,
+    screenshots:       t.screenshots ?? {},
     created_at:        t.createdAt ?? Date.now(),
     updated_at:        t.updatedAt ?? null,
   };
@@ -154,6 +155,7 @@ function rowToTest(row) {
     variants:         row.variants ?? ["B"],
     overlays:         row.overlays ?? {},
     results:          row.results ?? null,
+    screenshots:      row.screenshots ?? {},
     createdAt:        row.created_at,
     updatedAt:        row.updated_at,
   };
