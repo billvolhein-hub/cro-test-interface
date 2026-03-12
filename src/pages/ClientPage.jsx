@@ -4,6 +4,7 @@ import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
+import ClientNotesFeed from "../components/ClientNotesFeed";
 
 const PIPELINE = [
   { label: "Backlog",  statuses: ["Backlog"],                          color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
@@ -421,6 +422,13 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
         </div>
 
         {/* ── Tests grouped by stage ── */}
+        {/* Client Notes feed */}
+        <ClientNotesFeed
+          tests={clientTests}
+          clients={[client]}
+          clientId={clientId}
+        />
+
         {/* Tests grouped by stage — display order: Live, In Work, Backlog, Complete */}
         {clientTests.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: MUTED }}>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import ClientsModal from "../components/ClientsModal";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, parseCSVMulti, mapCSVToTest } from "../lib/utils";
+import ClientNotesFeed from "../components/ClientNotesFeed";
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, ACCENT, BG, CARD, BORDER, TEXT, MUTED, DIM, TEAL } from "../lib/constants";
 
 const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_STATUSES[0];
@@ -22,6 +23,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
   const [draggingId,       setDraggingId]       = useState(null);
   const [dragOverStatus,   setDragOverStatus]   = useState(null);
   const [expandedCards,    setExpandedCards]    = useState(new Set());
+  const [notesFeedOpen,    setNotesFeedOpen]    = useState(true);
 
   const toggleCard = (id, e) => { e.stopPropagation(); setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
 
@@ -245,6 +247,15 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             );
           })()}
         </div>
+
+        {/* Client Notes feed */}
+        <ClientNotesFeed
+          tests={activeClientId === "all" ? tests : tests.filter(t => (t.clientId ?? clients[0]?.id) === activeClientId)}
+          clients={clients}
+          clientId={activeClientId === "all" ? null : activeClientId}
+          collapsed={!notesFeedOpen}
+          onToggle={() => setNotesFeedOpen(v => !v)}
+        />
 
         {/* Import feedback */}
         {importResult && (

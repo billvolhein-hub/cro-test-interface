@@ -674,7 +674,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   } else {
                     const newId = Date.now();
                     updateActiveOverlays(prev => [...prev, { id: newId, ...ot, relX, relY, note: "" }]);
-                    if (ot.isAnnotation) { setEditingNote(""); setEditingOverlayId(newId); }
+                    if (ot.isAnnotation || ot.isClientNote) { setEditingNote(""); setEditingOverlayId(newId); }
                   }
                 }}
               >
@@ -737,7 +737,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         e.stopPropagation();
                         if (editingOverlayId === p.id) { e.preventDefault(); return; }
                         e.dataTransfer.setData("overlayMove", p.id.toString());
-                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation }));
+                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation, isClientNote: p.isClientNote }));
                       }}
                       onClick={() => {
                         setEditingNote(p.note || "");
@@ -748,11 +748,11 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         position: "absolute",
                         left: `${p.relX * 100}%`,
                         top: `${p.relY * 100}%`,
-                        transform: p.isAnnotation ? "translate(-50%, -100%)" : "translate(-50%, -50%)",
-                        zIndex: editingOverlayId === p.id ? 30 : 10,
+                        transform: (p.isAnnotation || p.isClientNote) ? "translate(-50%, -100%)" : "translate(-50%, -50%)",
+                        zIndex: p.isClientNote ? (editingOverlayId === p.id ? 40 : 20) : editingOverlayId === p.id ? 30 : 10,
                         cursor: "grab",
                         userSelect: "none",
-                        ...(p.isAnnotation ? {} : {
+                        ...(!p.isAnnotation && !p.isClientNote ? {
                           width: 26, height: 26, borderRadius: "50%",
                           background: p.color,
                           border: `2.5px solid ${editingOverlayId === p.id ? "#fff" : "white"}`,
@@ -761,10 +761,36 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                           fontSize: 10, fontWeight: 800, color: "#fff",
                           boxShadow: "0 2px 10px rgba(0,0,0,.5)",
                           fontFamily: "'Inter',sans-serif",
-                        }),
+                        } : {}),
                       }}
                     >
-                      {p.isAnnotation ? (
+                      {p.isClientNote ? (
+                        <div style={{ position: "relative" }}>
+                          <div style={{
+                            background: p.color,
+                            color: "#fff",
+                            borderRadius: 7,
+                            padding: "7px 11px 7px 9px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            fontFamily: "'Inter',sans-serif",
+                            maxWidth: 200,
+                            boxShadow: "0 3px 14px rgba(124,58,237,.5)",
+                            border: editingOverlayId === p.id ? "2px solid #fff" : "2px solid rgba(255,255,255,.3)",
+                            outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
+                            whiteSpace: p.note ? "normal" : "nowrap",
+                            lineHeight: 1.4,
+                            display: "flex", alignItems: "flex-start", gap: 6,
+                          }}>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+                              <path d="M2 2h8v7l-4 2-4-2V2z" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
+                              <path d="M4 5h4M4 7h2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round"/>
+                            </svg>
+                            {p.note || "✎ Client note…"}
+                          </div>
+                          <div style={{ position: "absolute", bottom: -7, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: `7px solid ${p.color}` }} />
+                        </div>
+                      ) : p.isAnnotation ? (
                         <div style={{
                           background: p.color,
                           color: "#fff",
@@ -927,7 +953,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   <div
                     key={o.label}
                     draggable
-                    onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: o.label, color: o.color }))}
+                    onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: o.label, color: o.color, isAnnotation: o.isAnnotation, isClientNote: o.isClientNote }))}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
                       padding: "7px 10px", borderRadius: 6,
