@@ -35,6 +35,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
   const [editing, setEditing]   = useState(false);
   const [draft,   setDraft]     = useState(brand);
   const [saving,  setSaving]    = useState(false);
+  const [saveErr, setSaveErr]   = useState(null);
   const logoRef  = useRef(null);
   const bgImgRef = useRef(null);
 
@@ -60,8 +61,9 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
 
   const saveBrand = async () => {
     setSaving(true);
+    setSaveErr(null);
     try { await onUpdateClientBrand(clientId, draft); setEditing(false); }
-    catch (e) { console.error(e); }
+    catch (e) { console.error(e); setSaveErr(e?.message || JSON.stringify(e)); }
     finally { setSaving(false); }
   };
 
@@ -351,6 +353,11 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
 
             </div>
 
+            {saveErr && (
+              <div style={{ color: "#f87171", fontSize: 12, marginBottom: 8, background: "#1a0000", border: "1px solid #7f1d1d", borderRadius: 6, padding: "8px 12px" }}>
+                Save error: {saveErr}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <button onClick={saveBrand} disabled={saving}
                 style={{ background: ACCENT, color: "#fff", border: "none", padding: "10px 24px", borderRadius: 7, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}>
