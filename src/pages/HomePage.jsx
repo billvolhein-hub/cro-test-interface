@@ -25,6 +25,16 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
 
   const toggleCard = (id, e) => { e.stopPropagation(); setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
 
+  const selectClient = (clientId) => {
+    setActiveClientId(clientId);
+    if (clientId === "all") {
+      setExpandedCards(new Set());
+    } else {
+      const ids = tests.filter(t => resolveClientId(t) === clientId).map(t => t.id);
+      setExpandedCards(new Set(ids));
+    }
+  };
+
   const PAGE_SIZE = 6;
 
   const toggleSelect = (id, e) => {
@@ -168,7 +178,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           {[{ id: "all", name: "All Clients" }, ...clients].map((c) => (
             <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 20, overflow: "hidden", border: "1.5px solid", transition: "all .15s", borderColor: activeClientId === c.id ? ACCENT : BORDER }}>
-              <button onClick={() => setActiveClientId(c.id)}
+              <button onClick={() => selectClient(c.id)}
                 style={{ padding: "6px 14px", fontSize: 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", transition: "all .15s", background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED }}>
                 {c.name}
               </button>
@@ -221,7 +231,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                 style={{ background: ACCENT, color: "#fff", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
                 Client Portfolio →
               </button>
-              <button onClick={() => setActiveClientId("all")}
+              <button onClick={() => selectClient("all")}
                 style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
                 ← All Clients
               </button>
@@ -271,7 +281,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
         ) : sorted.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: MUTED }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No tests for this client</div>
-            <div style={{ fontSize: 13 }}>Try selecting a different client or <button onClick={() => setActiveClientId("all")} style={{ background: "none", border: "none", color: ACCENT, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontSize: 13, padding: 0 }}>view all</button>.</div>
+            <div style={{ fontSize: 13 }}>Try selecting a different client or <button onClick={() => selectClient("all")} style={{ background: "none", border: "none", color: ACCENT, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontSize: 13, padding: 0 }}>view all</button>.</div>
           </div>
         ) : (() => {
           const renderCard = (t) => {
