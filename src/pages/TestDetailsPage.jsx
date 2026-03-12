@@ -343,6 +343,20 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               </div>
             )}
 
+            {/* View Template CTA — mobile only, shown above hypothesis */}
+            {isTablet && (
+              <button
+                onClick={openPreview}
+                style={{ width: "100%", marginBottom: 20, background: TEAL, color: "#fff", border: "none", borderRadius: 8, padding: "13px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <circle cx="8" cy="8" r="2" stroke="white" strokeWidth="1.5"/>
+                </svg>
+                View Template
+              </button>
+            )}
+
             {/* Hypothesis */}
             {(() => {
               const incomplete = !test.if || !test.then || !test.because;
