@@ -65,14 +65,12 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     setSvgContent(generateSVG(test, screenshotsMap[test?.id] || {}, byVariant));
 
   const updateActiveOverlays = (updater) => {
-    setOverlaysByVariant(prev => {
-      const current = prev[activeVariant] ?? [];
-      const next = typeof updater === "function" ? updater(current) : updater;
-      const updated = { ...prev, [activeVariant]: next };
-      rebuildSvg(updated);
-      onUpdateTest(test.id, "overlays", updated);
-      return updated;
-    });
+    const current = overlaysByVariant[activeVariant] ?? [];
+    const next = typeof updater === "function" ? updater(current) : updater;
+    const updated = { ...overlaysByVariant, [activeVariant]: next };
+    setOverlaysByVariant(updated);
+    rebuildSvg(updated);
+    onUpdateTest(test.id, "overlays", updated);
   };
 
   // Load screenshots from IDB on mount
