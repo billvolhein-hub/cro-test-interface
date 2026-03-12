@@ -104,7 +104,6 @@ function fieldToCol(field) {
   if (field === "createdAt") return "created_at";
   if (field === "variants") return "variants";
   if (field === "overlays") return "overlays";
-  if (field === "clientNotes") return "client_notes";
   if (field === "results") return "results";
   return field; // potential, importance, ease, status, audience, findings
 }
@@ -128,7 +127,6 @@ function testToRow(t) {
     findings:          t.findings ?? null,
     variants:          t.variants ?? ["B"],
     overlays:          t.overlays ?? {},
-    client_notes:      t.clientNotes ?? [],
     results:           t.results ?? null,
     screenshots:       t.screenshots ?? {},
     created_at:        t.createdAt ?? Date.now(),
@@ -156,7 +154,6 @@ function rowToTest(row) {
     findings:         row.findings ?? "",
     variants:         row.variants ?? ["B"],
     overlays:         row.overlays ?? {},
-    clientNotes:      row.client_notes ?? [],
     results:          row.results ?? null,
     screenshots:      row.screenshots ?? {},
     createdAt:        row.created_at,

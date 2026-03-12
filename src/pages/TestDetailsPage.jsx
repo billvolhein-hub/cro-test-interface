@@ -38,7 +38,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [editingNote, setEditingNote] = useState("");
   const [dragOverZone, setDragOverZone] = useState(null);
   const lastDropTime = useRef(0);
-  const [clientNoteInput, setClientNoteInput] = useState("");
   const [findingsEditing, setFindingsEditing] = useState(false);
   const [findingsAiLoading, setFindingsAiLoading] = useState(false);
   const [findingsAiError, setFindingsAiError] = useState("");
@@ -340,64 +339,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 <TestResults results={test.results ?? null} onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)} onClear={() => onUpdateTest(Number(id), "results", null)} />
               </div>
             )}
-
-            {/* Client Notes */}
-            {(() => {
-              const notes = test.clientNotes ?? [];
-              const addNote = () => {
-                const trimmed = clientNoteInput.trim();
-                if (!trimmed) return;
-                const updated = [...notes, { id: Date.now(), note: trimmed }];
-                onUpdateTest(Number(id), "clientNotes", updated);
-                setClientNoteInput("");
-              };
-              return (
-                <div style={{ background: CARD, border: "1.5px solid #DDD6FE", borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(124,58,237,.08)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Client Notes</div>
-                  {notes.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      {notes.map(n => (
-                        <div key={n.id} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
-                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#7C3AED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                              <path d="M2 2h8v7l-4 2-4-2V2z" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
-                              <path d="M4 5h4M4 7h2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round"/>
-                            </svg>
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6 }}>{n.note}</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-                              <span style={{ fontSize: 10, color: MUTED }}>{fmtDate(n.id)}</span>
-                              {!isPortal && (
-                                <button
-                                  onClick={() => onUpdateTest(Number(id), "clientNotes", notes.filter(x => x.id !== n.id))}
-                                  style={{ fontSize: 10, color: "#DC2626", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
-                                >Remove</button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <textarea
-                      value={clientNoteInput}
-                      onChange={e => setClientNoteInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addNote(); } }}
-                      placeholder="Leave a note…"
-                      rows={2}
-                      style={{ flex: 1, border: `1.5px solid #DDD6FE`, borderRadius: 6, padding: "8px 10px", fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, resize: "none", outline: "none", lineHeight: 1.5 }}
-                    />
-                    <button
-                      onClick={addNote}
-                      style={{ alignSelf: "flex-end", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                    >Post</button>
-                  </div>
-                  <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Enter to post · Shift+Enter for new line</div>
-                </div>
-              );
-            })()}
 
             {/* Hypothesis */}
             {(() => {
@@ -800,7 +741,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         e.stopPropagation();
                         if (editingOverlayId === p.id) { e.preventDefault(); return; }
                         e.dataTransfer.setData("overlayMove", p.id.toString());
-                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation }));
+                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation, isClientNote: p.isClientNote }));
                       }}
                       onClick={() => {
                         setEditingNote(p.note || "");
@@ -982,11 +923,40 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 })()}
               </div>
 
+              {/* Client Notes */}
+              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Client Notes — Variant {activeVariant}</div>
+                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 10 }}>Drag onto the template to pin a note. Click a marker to edit.</div>
+                <div
+                  draggable
+                  onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: "Client Note", color: "#7C3AED", isClientNote: true }))}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 6, background: "#1A2540", border: "1px solid #3B2A5C", marginBottom: 10, cursor: "grab", userSelect: "none" }}
+                >
+                  <div style={{ width: 12, height: 12, borderRadius: 3, background: "#7C3AED", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>Client Note</span>
+                </div>
+                {activeOverlays.filter(o => o.isClientNote).map(o => (
+                  <div key={o.id} style={{ background: "#160F2A", border: "1px solid #3B2A5C", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: "#C8B8F0", lineHeight: 1.5, marginBottom: 4 }}>{o.note || <span style={{ color: "#4A3A6A", fontStyle: "italic" }}>No note yet</span>}</div>
+                    <button
+                      onClick={() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }}
+                      style={{ fontSize: 10, color: "#9F7AEA", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                    >Edit</button>
+                  </div>
+                ))}
+                {activeOverlays.filter(o => o.isClientNote).length > 0 && (
+                  <button
+                    onClick={() => updateActiveOverlays(prev => prev.filter(o => !o.isClientNote))}
+                    style={{ width: "100%", marginTop: 2, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "5px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                  >Clear notes ({activeOverlays.filter(o => o.isClientNote).length})</button>
+                )}
+              </div>
+
               {/* Overlay Items */}
               <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Overlay Items — Variant {activeVariant}</div>
-                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 12 }}>Drag onto the variant view to annotate changes. Click a marker to remove it.</div>
-                {OVERLAY_TYPES.map(o => (
+                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 12 }}>Drag onto the variant view to annotate changes. Click a marker to edit.</div>
+                {OVERLAY_TYPES.filter(o => !o.isClientNote).map(o => (
                   <div
                     key={o.label}
                     draggable
@@ -1002,12 +972,12 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                     <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>{o.label}</span>
                   </div>
                 ))}
-                {activeOverlays.length > 0 && (
+                {activeOverlays.filter(o => !o.isClientNote).length > 0 && (
                   <button
-                    onClick={() => updateActiveOverlays([])}
+                    onClick={() => updateActiveOverlays(prev => prev.filter(o => o.isClientNote))}
                     style={{ width: "100%", marginTop: 6, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "6px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
                   >
-                    Clear all ({activeOverlays.length})
+                    Clear overlays ({activeOverlays.filter(o => !o.isClientNote).length})
                   </button>
                 )}
               </div>

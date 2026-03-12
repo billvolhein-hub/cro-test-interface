@@ -11,8 +11,12 @@ export function collectClientNotes(tests, clientId) {
   const notes = [];
   const pool = clientId != null ? tests.filter(t => t.clientId === clientId) : tests;
   for (const test of pool) {
-    for (const note of test.clientNotes ?? []) {
-      if (note.note) notes.push({ test, note, ts: note.id });
+    for (const [variant, overlays] of Object.entries(test.overlays ?? {})) {
+      for (const overlay of overlays ?? []) {
+        if (overlay.isClientNote && overlay.note) {
+          notes.push({ test, variant, overlay, ts: overlay.id });
+        }
+      }
     }
   }
   return notes.sort((a, b) => b.ts - a.ts);
@@ -64,29 +68,24 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
       {/* Feed */}
       {!collapsed && (
         <div style={{ maxHeight: 340, overflowY: "auto" }}>
-          {notes.map(({ test, note }) => {
+          {notes.map(({ test, overlay }) => {
             const client = clients?.find(c => c.id === test.clientId);
             const testUrl = isPortal
               ? `/portal/${toSlug(client?.name)}/tests/${toSlug(test.testName)}`
               : `/tests/${test.id}`;
             return (
               <div
-                key={note.id}
+                key={overlay.id}
                 style={{ display: "flex", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${NOTE_BORDER}`, alignItems: "flex-start" }}
               >
-                {/* Avatar */}
                 <div style={{ width: 28, height: 28, borderRadius: "50%", background: NOTE_COLOR, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
                   <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
                     <path d="M2 2h8v7l-4 2-4-2V2z" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
                     <path d="M4 5h4M4 7h2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round"/>
                   </svg>
                 </div>
-
-                {/* Body */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.5, marginBottom: 5 }}>
-                    {note.note}
-                  </div>
+                  <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.5, marginBottom: 5 }}>{overlay.note}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <button
                       onClick={() => navigate(testUrl)}
@@ -97,7 +96,7 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
                     {client && (
                       <span style={{ fontSize: 11, color: MUTED }}>{client.name}</span>
                     )}
-                    <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>{timeAgo(note.id)}</span>
+                    <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>{timeAgo(overlay.id)}</span>
                   </div>
                 </div>
               </div>
