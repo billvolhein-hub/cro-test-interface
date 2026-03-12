@@ -71,8 +71,8 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
           {notes.map(({ test, overlay }) => {
             const client = clients?.find(c => c.id === test.clientId);
             const testUrl = isPortal
-              ? `/portal/${toSlug(client?.name)}/tests/${toSlug(test.testName)}`
-              : `/tests/${test.id}`;
+              ? `/portal/${toSlug(client?.name)}/tests/${toSlug(test.testName)}?template=1`
+              : `/tests/${test.id}?template=1`;
             return (
               <div
                 key={overlay.id}
@@ -94,7 +94,7 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
                       {test.testName || "Untitled Test"}
                     </button>
                     {client && (
-                      <span style={{ fontSize: 11, color: MUTED }}>{client.name}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: NOTE_COLOR, background: "#EDE9FE", borderRadius: 4, padding: "1px 6px" }}>{client.name}</span>
                     )}
                     <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>{timeAgo(overlay.id)}</span>
                   </div>

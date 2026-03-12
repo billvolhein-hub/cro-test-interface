@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
 import ScreenshotZone from "../components/ScreenshotZone";
@@ -21,13 +21,14 @@ import { loadScreenshots } from "../db";
 export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
   const params = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isPortal } = usePortal();
   const test = isPortal
     ? tests.find(t => toSlug(t.testName) === params.testSlug)
     : tests.find(t => t.id === Number(params.id));
   const id = test?.id;
 
-  const [svgPreviewOpen, setSvgPreviewOpen] = useState(false);
+  const [svgPreviewOpen, setSvgPreviewOpen] = useState(() => searchParams.get("template") === "1");
   const [svgPreviewZoom, setSvgPreviewZoom] = useState("fit");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [svgContent, setSvgContent] = useState("");
@@ -874,6 +875,35 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
             </div>
             <div style={{ width: 260, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
 
+              {/* Client Notes */}
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #1E2F48" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Client Notes — Variant {activeVariant}</div>
+                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 10 }}>Drag onto the template to pin a note. Click a marker to edit.</div>
+                <div
+                  draggable
+                  onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: "Client Note", color: "#7C3AED", isClientNote: true }))}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 6, background: "#1A2540", border: "1px solid #3B2A5C", marginBottom: 10, cursor: "grab", userSelect: "none" }}
+                >
+                  <div style={{ width: 12, height: 12, borderRadius: 3, background: "#7C3AED", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>Client Note</span>
+                </div>
+                {activeOverlays.filter(o => o.isClientNote).map(o => (
+                  <div key={o.id} style={{ background: "#160F2A", border: "1px solid #3B2A5C", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: "#C8B8F0", lineHeight: 1.5, marginBottom: 4 }}>{o.note || <span style={{ color: "#4A3A6A", fontStyle: "italic" }}>No note yet</span>}</div>
+                    <button
+                      onClick={() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }}
+                      style={{ fontSize: 10, color: "#9F7AEA", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                    >Edit</button>
+                  </div>
+                ))}
+                {activeOverlays.filter(o => o.isClientNote).length > 0 && (
+                  <button
+                    onClick={() => updateActiveOverlays(prev => prev.filter(o => !o.isClientNote))}
+                    style={{ width: "100%", marginTop: 2, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "5px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                  >Clear notes ({activeOverlays.filter(o => o.isClientNote).length})</button>
+                )}
+              </div>
+
               {/* Control screenshots */}
               <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Screenshots — Control</div>
               <ScreenshotZone
@@ -921,35 +951,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                     </>
                   );
                 })()}
-              </div>
-
-              {/* Client Notes */}
-              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Client Notes — Variant {activeVariant}</div>
-                <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 10 }}>Drag onto the template to pin a note. Click a marker to edit.</div>
-                <div
-                  draggable
-                  onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: "Client Note", color: "#7C3AED", isClientNote: true }))}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 6, background: "#1A2540", border: "1px solid #3B2A5C", marginBottom: 10, cursor: "grab", userSelect: "none" }}
-                >
-                  <div style={{ width: 12, height: 12, borderRadius: 3, background: "#7C3AED", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>Client Note</span>
-                </div>
-                {activeOverlays.filter(o => o.isClientNote).map(o => (
-                  <div key={o.id} style={{ background: "#160F2A", border: "1px solid #3B2A5C", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, color: "#C8B8F0", lineHeight: 1.5, marginBottom: 4 }}>{o.note || <span style={{ color: "#4A3A6A", fontStyle: "italic" }}>No note yet</span>}</div>
-                    <button
-                      onClick={() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }}
-                      style={{ fontSize: 10, color: "#9F7AEA", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
-                    >Edit</button>
-                  </div>
-                ))}
-                {activeOverlays.filter(o => o.isClientNote).length > 0 && (
-                  <button
-                    onClick={() => updateActiveOverlays(prev => prev.filter(o => !o.isClientNote))}
-                    style={{ width: "100%", marginTop: 2, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "5px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                  >Clear notes ({activeOverlays.filter(o => o.isClientNote).length})</button>
-                )}
               </div>
 
               {/* Overlay Items */}
