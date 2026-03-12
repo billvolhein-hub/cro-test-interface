@@ -672,7 +672,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   } else {
                     const newId = Date.now();
                     updateActiveOverlays(prev => [...prev, { id: newId, ...ot, relX, relY, note: "" }]);
-                    if (ot.isAnnotation || ot.isClientNote) { setEditingNote(""); setEditingOverlayId(newId); }
+                    if (ot.isAnnotation) { setEditingNote(""); setEditingOverlayId(newId); }
                   }
                 }}
               >
@@ -763,7 +763,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                       }}
                     >
                       {p.isClientNote ? (
-                        <div style={{ position: "relative" }}>
+                        <div style={{ position: "relative", visibility: editingOverlayId === p.id ? "hidden" : "visible" }}>
                           <div style={{
                             background: p.color,
                             color: "#fff",
