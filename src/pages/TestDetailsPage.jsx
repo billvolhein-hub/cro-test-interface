@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import AppHeader from "../components/AppHeader";
+import AppHeader, { PortalHeader } from "../components/AppHeader";
+import { usePortal } from "../context/PortalContext";
 import ScreenshotZone from "../components/ScreenshotZone";
 import FindingsEditor from "../components/FindingsEditor";
 import TestResults from "../components/TestResults";
@@ -20,6 +21,7 @@ import { loadScreenshots } from "../db";
 export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isPortal } = usePortal();
   const test = tests.find(t => t.id === Number(id));
 
   const [svgPreviewOpen, setSvgPreviewOpen] = useState(false);
@@ -218,30 +220,44 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         .findings-view u{text-decoration:underline;}
       `}</style>
 
-      <AppHeader right={(() => {
+      {(() => {
         const client = clients?.find(c => c.id === test.clientId);
-        return client ? (
-          <button onClick={() => navigate(`/clients/${client.id}`)}
-            style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            ← {client.name}
-          </button>
-        ) : null;
-      })()} />
+        if (isPortal) {
+          return <PortalHeader client={client} right={
+            client && (
+              <button onClick={() => navigate(`/portal/${client.id}`)}
+                style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.25)", color: client?.brand?.textColor || "#fff", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(4px)" }}>
+                ← Portfolio
+              </button>
+            )
+          } />;
+        }
+        return <AppHeader right={
+          client ? (
+            <button onClick={() => navigate(`/clients/${client.id}`)}
+              style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              ← {client.name}
+            </button>
+          ) : null
+        } />;
+      })()}
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 28px" }}>
         {/* Page title row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 16 }}>
           <div
-            onClick={() => navigate(`/tests/${id}/edit`)}
-            title="Edit definition"
-            style={{ cursor: "pointer", group: true }}>
+            onClick={() => !isPortal && navigate(`/tests/${id}/edit`)}
+            title={isPortal ? undefined : "Edit definition"}
+            style={{ cursor: isPortal ? "default" : "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <h1 style={{ fontSize: 26, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>
                 {test.testName || <span style={{ color: DIM, fontWeight: 400 }}>Untitled Test</span>}
               </h1>
+              {!isPortal && (
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: MUTED, flexShrink: 0, marginTop: 2 }}>
                 <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
               </svg>
+              )}
             </div>
             {test.pageUrl && (
               <div style={{ fontSize: 13, color: TEAL, fontWeight: 500, marginTop: 4 }}>{test.pageUrl}</div>
@@ -288,11 +304,11 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                       ) : <>✦ AI Populate</>}
                     </button>
                   )}
-                  {findingsEditing ? (
+                  {!isPortal && (findingsEditing ? (
                     <button onClick={() => setFindingsEditing(false)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Done</button>
                   ) : (
                     <button onClick={() => setFindingsEditing(true)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>✎ Edit</button>
-                  )}
+                  ))}
                 </div>
                 {findingsAiError && (
                   <div style={{ marginBottom: 12, fontSize: 12, color: "#DC2626", background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 6, padding: "8px 12px" }}>{findingsAiError}</div>
@@ -332,7 +348,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 <div style={{ background: CARD, border: `1.5px solid ${incomplete && !hypoEdit ? "#FDE68A" : BORDER}`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Hypothesis</div>
-                    {!hypoEdit && (
+                    {!hypoEdit && !isPortal && (
                       <button onClick={openHypoBuilder}
                         style={{ background: incomplete ? "#D97706" : BG, color: incomplete ? "#fff" : MUTED, border: incomplete ? "none" : `1.5px solid ${BORDER}`, padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
                         {incomplete ? (
@@ -579,8 +595,8 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               </div>
             </div>
 
-            {/* Danger zone */}
-            <div style={{ marginTop: 16, padding: "14px 16px", border: `1.5px solid #FECACA`, borderRadius: 10, background: "#FFF8F8" }}>
+            {/* Danger zone — hidden in portal mode */}
+            {!isPortal && <div style={{ marginTop: 16, padding: "14px 16px", border: `1.5px solid #FECACA`, borderRadius: 10, background: "#FFF8F8" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>Danger Zone</div>
               {confirmDelete ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -600,7 +616,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   Delete Test
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import AppHeader from "../components/AppHeader";
+import AppHeader, { PortalHeader } from "../components/AppHeader";
+import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 
@@ -29,6 +30,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
   const navigate = useNavigate();
   const clientId = Number(id);
   const client = clients.find(c => c.id === clientId);
+  const { isPortal } = usePortal();
 
   const brand = mergeBrand(client?.brand);
 
@@ -126,7 +128,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
     return (
       <div
         key={t.id}
-        onClick={() => navigate(`/tests/${t.id}`)}
+        onClick={() => navigate(isPortal ? `/portal/${clientId}/tests/${t.id}` : `/tests/${t.id}`)}
         style={{
           background: isHighPie ? "linear-gradient(135deg,#fff 80%,#FFFBEB 100%)" : CARD,
           border: `1.5px solid ${isHighPie ? "#F59E0B" : BORDER}`,
@@ -205,7 +207,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
         .upload-btn:hover{border-color:#4A7AAA;color:#8BA4C8;}
       `}</style>
 
-      <AppHeader />
+      {isPortal ? <PortalHeader client={client} /> : <AppHeader />}
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "36px 28px" }}>
 
@@ -215,7 +217,8 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
             <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.45)", borderRadius: "inherit" }} />
           )}
           <div style={{ position: "relative", zIndex: 1 }}>
-            {/* Pencil edit button — top-right corner */}
+            {/* Pencil edit button — hidden in portal mode */}
+            {!isPortal && (
             <button
               onClick={editing ? cancelEdit : openEdit}
               title={editing ? "Cancel" : "Edit brand"}
@@ -227,6 +230,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M8 4l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
               )}
             </button>
+            )}
 
             {/* Top row: text left, logo right */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, paddingRight: 44 }}>
@@ -376,6 +380,23 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
                 Reset to Default
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── Share portal link (admin only) ── */}
+        {!isPortal && (
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Client Portal Link</div>
+              <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {`${window.location.origin}/portal/${clientId}`}
+              </div>
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${clientId}`); }}
+              style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Copy Link
+            </button>
           </div>
         )}
 

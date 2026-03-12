@@ -9,6 +9,7 @@ import HomePage from "./pages/HomePage";
 import TestDetailsPage from "./pages/TestDetailsPage";
 import TestDefinitionPage from "./pages/TestDefinitionPage";
 import ClientPage from "./pages/ClientPage";
+import { PortalContext } from "./context/PortalContext";
 
 export default function App() {
   const [tests, setTests] = useState([]);
@@ -214,6 +215,37 @@ export default function App() {
             />
           }
         />
+        {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
+        <Route
+          path="/portal/:clientId"
+          element={
+            <PortalContext.Provider value={{ isPortal: true }}>
+              <ClientPage
+                clients={clients}
+                tests={tests}
+                onUpdateClientBrand={onUpdateClientBrand}
+              />
+            </PortalContext.Provider>
+          }
+        />
+        <Route
+          path="/portal/:clientId/tests/:id"
+          element={
+            <PortalContext.Provider value={{ isPortal: true }}>
+              <TestDetailsPage
+                tests={tests}
+                screenshotsMap={screenshotsMap}
+                setScreenshotsMap={setScreenshotsMap}
+                onUpdateTest={onUpdateTest}
+                onDeleteTest={onDeleteTest}
+                onSaveScreenshot={onSaveScreenshot}
+                onClearScreenshot={onClearScreenshot}
+                clients={clients}
+              />
+            </PortalContext.Provider>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
