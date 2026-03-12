@@ -91,7 +91,11 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
       canvas.height = height;
       canvas.getContext("2d").drawImage(img, 0, 0, width, height);
       URL.revokeObjectURL(url);
-      setDraft(d => ({ ...d, [key]: canvas.toDataURL("image/jpeg", 0.82) }));
+      // Use PNG for logos (preserves transparency), JPEG for background images
+      const dataUrl = isLogo
+        ? canvas.toDataURL("image/png")
+        : canvas.toDataURL("image/jpeg", 0.82);
+      setDraft(d => ({ ...d, [key]: dataUrl }));
     };
     img.src = url;
   };
