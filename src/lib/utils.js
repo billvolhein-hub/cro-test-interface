@@ -7,6 +7,9 @@ export const scoreLabel  = (s) => s >= 7.5 ? "High Priority" : s >= 5 ? "Medium 
 export const fmtDate = (ts) =>
   ts ? new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
+export const toSlug = (str) =>
+  (str || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
 // ── CSV import helpers ─────────────────────────────────────────────────────────
 function parseCSVRow(line) {
   const result = [];

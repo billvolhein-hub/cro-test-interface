@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
-import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate } from "../lib/utils";
+import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 
 const PIPELINE = [
@@ -26,11 +26,13 @@ function mergeBrand(saved) {
 }
 
 export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
-  const { id } = useParams();
+  const { id, clientSlug } = useParams();
   const navigate = useNavigate();
-  const clientId = Number(id);
-  const client = clients.find(c => c.id === clientId);
   const { isPortal } = usePortal();
+  const client = isPortal
+    ? clients.find(c => toSlug(c.name) === clientSlug)
+    : clients.find(c => c.id === Number(id));
+  const clientId = client?.id;
 
   const brand = mergeBrand(client?.brand);
 
@@ -128,7 +130,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
     return (
       <div
         key={t.id}
-        onClick={() => navigate(isPortal ? `/portal/${clientId}/tests/${t.id}` : `/tests/${t.id}`)}
+        onClick={() => navigate(isPortal ? `/portal/${toSlug(client.name)}/tests/${toSlug(t.testName)}` : `/tests/${t.id}`)}
         style={{
           background: isHighPie ? "linear-gradient(135deg,#fff 80%,#FFFBEB 100%)" : CARD,
           border: `1.5px solid ${isHighPie ? "#F59E0B" : BORDER}`,
@@ -389,11 +391,11 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Client Portal Link</div>
               <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {`${window.location.origin}/portal/${clientId}`}
+                {`${window.location.origin}/portal/${toSlug(client.name)}`}
               </div>
             </div>
             <button
-              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${clientId}`); }}
+              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${toSlug(client.name)}`); }}
               style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Copy Link
             </button>

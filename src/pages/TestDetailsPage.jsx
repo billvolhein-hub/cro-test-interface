@@ -14,16 +14,18 @@ function zoneForOverlay(overlay, test) {
   const py = overlay.relY * totalH;
   return zones.find(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) ?? null;
 }
-import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis, generateFindings } from "../lib/utils";
+import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis, generateFindings, toSlug } from "../lib/utils";
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
 export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
   const params = useParams();
-  const id = params.id ?? params.testId;
   const navigate = useNavigate();
   const { isPortal } = usePortal();
-  const test = tests.find(t => t.id === Number(id));
+  const test = isPortal
+    ? tests.find(t => toSlug(t.testName) === params.testSlug)
+    : tests.find(t => t.id === Number(params.id));
+  const id = test?.id;
 
   const [svgPreviewOpen, setSvgPreviewOpen] = useState(false);
   const [svgPreviewZoom, setSvgPreviewZoom] = useState("fit");
@@ -226,7 +228,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         if (isPortal) {
           return <PortalHeader client={client} right={
             client && (
-              <button onClick={() => navigate(`/portal/${client.id}`)}
+              <button onClick={() => navigate(`/portal/${toSlug(client.name)}`)}
                 style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.25)", color: client?.brand?.textColor || "#fff", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(4px)" }}>
                 ← Portfolio
               </button>
