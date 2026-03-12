@@ -194,12 +194,11 @@ Rules:
 - Be specific and concise — each field should be 1–2 sentences
 - Use present tense`;
 
-  const res = await fetch("/anthropic/v1/messages", {
+  const res = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -260,12 +259,11 @@ Rules:
 - Do not use the word "significant" unless confidence is ≥95%
 - Return ONLY the HTML, no markdown fences, no commentary`;
 
-  const res = await fetch("/anthropic/v1/messages", {
+  const res = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -364,7 +362,7 @@ export async function fetchConvertResults(experienceId) {
     throw new Error("Add VITE_CONVERT_ACCOUNT_ID and VITE_CONVERT_PROJECT_ID to your .env file.");
 
   const base = `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}`;
-  const proxyBase = `/convert/api/v2/accounts/${accountId}/projects/${projectId}`;
+  const proxyBase = `/api/convert/api/v2/accounts/${accountId}/projects/${projectId}`;
 
   // ── 1. Fetch goal names ───────────────────────────────────────────────────
   const goalsTarget = `${base}/goals`;

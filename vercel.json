@@ -1,0 +1,9 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/anthropic/(.*)", "destination": "/api/anthropic/$1" },
+    { "source": "/api/convert/(.*)",   "destination": "/api/convert/$1"   }
+  ]
+}
