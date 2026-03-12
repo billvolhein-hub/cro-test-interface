@@ -514,6 +514,42 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               </button>
             </div>
 
+            {/* Client Notes */}
+            {(() => {
+              const clientNotes = activeOverlays.filter(o => o.isClientNote);
+              return (
+                <div style={{ background: CARD, border: "1.5px solid #DDD6FE", borderRadius: 10, padding: 18, marginBottom: 16, boxShadow: "0 1px 4px rgba(124,58,237,.08)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: clientNotes.length ? 12 : 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Client Notes</div>
+                    {clientNotes.length > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", background: "#EDE9FE", borderRadius: 8, padding: "1px 7px" }}>{clientNotes.length}</span>
+                    )}
+                  </div>
+                  {clientNotes.length === 0 ? (
+                    <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5 }}>No client notes yet.<br/><span style={{ fontSize: 11 }}>Open the template view to drag a note onto the page.</span></div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {clientNotes.map(o => (
+                        <div key={o.id} style={{ background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 6, padding: "8px 10px" }}>
+                          <div style={{ fontSize: 12, color: TEXT, lineHeight: 1.5, marginBottom: 4 }}>{o.note || <span style={{ color: MUTED, fontStyle: "italic" }}>No note text</span>}</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <button
+                              onClick={() => { setSvgPreviewOpen(true); setTimeout(() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }, 100); }}
+                              style={{ fontSize: 10, fontWeight: 600, color: "#7C3AED", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                            >Edit</button>
+                            <button
+                              onClick={() => updateActiveOverlays(prev => prev.filter(x => x.id !== o.id))}
+                              style={{ fontSize: 10, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                            >Remove</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Screenshots */}
             <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Screenshots</div>
@@ -556,15 +592,15 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 </div>
               )}
 
-              {/* Placed overlays for active variant */}
-              {activeOverlays.length === 0 ? (
+              {/* Placed overlays for active variant (excludes Client Notes) */}
+              {activeOverlays.filter(o => !o.isClientNote).length === 0 ? (
                 <div style={{ fontSize: 12, color: MUTED, textAlign: "center", padding: "16px 0", lineHeight: 1.5 }}>
                   No overlays placed.<br/>
                   <span style={{ fontSize: 11 }}>Open the SVG preview to drag overlays onto the template.</span>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {activeOverlays.map(o => {
+                  {activeOverlays.filter(o => !o.isClientNote).map(o => {
                     const zone = zoneForOverlay(o, test);
                     return (
                       <div key={o.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", borderRadius: 6, background: BG, border: `1px solid ${BORDER}` }}>
@@ -590,7 +626,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Types</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {OVERLAY_TYPES.map(o => (
+                  {OVERLAY_TYPES.filter(o => !o.isClientNote).map(o => (
                     <div key={o.label} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 4, background: BG, border: `1px solid ${BORDER}` }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: o.color, flexShrink: 0 }} />
                       <span style={{ fontSize: 10, color: TEXT, whiteSpace: "nowrap" }}>{o.label}</span>
