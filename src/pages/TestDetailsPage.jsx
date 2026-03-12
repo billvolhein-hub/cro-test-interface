@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useBreakpoint } from "../lib/useBreakpoint";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
 import ScreenshotZone from "../components/ScreenshotZone";
@@ -22,6 +23,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { isMobile, isTablet } = useBreakpoint();
   const { isPortal } = usePortal();
   const test = isPortal
     ? tests.find(t => toSlug(t.testName) === params.testSlug)
@@ -247,7 +249,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         } />;
       })()}
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 28px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px" : "36px 28px" }}>
         {/* Page title row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 16 }}>
           <div
@@ -291,7 +293,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
           <span style={{ fontSize: 12, color: DIM, fontWeight: 500, padding: "4px 0" }}>Updated {fmtDate(test.updatedAt)}</span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr" : "1fr 340px", gap: 24 }}>
           {/* Left column */}
           <div>
             {/* Findings — top of column when Test Complete */}
@@ -693,8 +695,8 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               Close
             </button>
           </div>
-          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-            <div style={{ flex: 1, overflow: "auto", padding: "20px", boxSizing: "border-box" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "auto", padding: isMobile ? "12px" : "20px", boxSizing: "border-box" }}>
               <div
                 style={{ position: "relative", display: "block", width: svgPreviewZoom === "fit" ? "100%" : "max-content" }}
                 onDragOver={e => e.preventDefault()}
@@ -909,7 +911,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 ))}
               </div>
             </div>
-            <div style={{ width: 260, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
+            <div style={isMobile ? { width: "100%", flexShrink: 0, background: "#111B2E", borderTop: "1px solid #2E3F5C", overflowY: "auto", maxHeight: "45vh", padding: "12px 14px" } : { width: 260, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
 
               {/* Client Notes */}
               <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #1E2F48" }}>

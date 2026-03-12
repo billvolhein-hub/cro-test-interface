@@ -5,6 +5,7 @@ import ClientsModal from "../components/ClientsModal";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, parseCSVMulti, mapCSVToTest } from "../lib/utils";
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, ACCENT, BG, CARD, BORDER, TEXT, MUTED, DIM, TEAL } from "../lib/constants";
+import { useBreakpoint } from "../lib/useBreakpoint";
 
 const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_STATUSES[0];
 
@@ -12,6 +13,7 @@ const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_ST
 
 export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient }) {
   const navigate = useNavigate();
+  const { isMobile, isTablet } = useBreakpoint();
   const [confirmDelete,    setConfirmDelete]    = useState(null);
   const [importResult,     setImportResult]     = useState(null);
   const [importError,      setImportError]      = useState("");
@@ -168,7 +170,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
       <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
         onChange={(e) => handleMassImport(e.target.files[0])} />
 
-      <div style={{ padding: "28px 28px 36px", overflowX: "hidden" }}>
+      <div style={{ padding: isMobile ? "16px 16px 28px" : "28px 28px 36px", overflowX: "hidden" }}>
 
         {/* Client filter bar */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -423,8 +425,10 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
           return (
             <>
               {/* Kanban board */}
-              <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: completed.length > 0 ? 32 : 0 }}>
-                {LANES.map(renderLane)}
+              <div style={{ overflowX: isMobile ? "auto" : "visible", margin: isMobile ? "0 -16px" : 0, padding: isMobile ? "0 16px 8px" : 0 }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: completed.length > 0 ? 32 : 0, minWidth: isMobile ? "fit-content" : undefined }}>
+                  {LANES.map(renderLane)}
+                </div>
               </div>
 
               {/* Test Complete section */}
@@ -447,7 +451,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 900, background: TEXT, borderRadius: 10, padding: "12px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 8px 32px rgba(0,0,0,.35)", minWidth: 340, maxWidth: "90vw" }}>
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 900, background: TEXT, borderRadius: 10, padding: isMobile ? "10px 14px" : "12px 20px", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, boxShadow: "0 8px 32px rgba(0,0,0,.35)", minWidth: isMobile ? "calc(100vw - 32px)" : 340, maxWidth: "90vw" }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", flex: 1 }}>
             {selectedIds.size} test{selectedIds.size !== 1 ? "s" : ""} selected
           </span>

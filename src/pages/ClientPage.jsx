@@ -5,6 +5,7 @@ import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 import ClientNotesFeed from "../components/ClientNotesFeed";
+import { useBreakpoint } from "../lib/useBreakpoint";
 
 const PIPELINE = [
   { label: "Backlog",  statuses: ["Backlog"],                          color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
@@ -30,6 +31,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
   const { id, clientSlug } = useParams();
   const navigate = useNavigate();
   const { isPortal } = usePortal();
+  const { isMobile } = useBreakpoint();
   const client = isPortal
     ? clients.find(c => toSlug(c.name) === clientSlug)
     : clients.find(c => c.id === Number(id));
@@ -212,7 +214,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
 
       {isPortal ? <PortalHeader client={client} /> : <AppHeader />}
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "36px 28px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "20px 16px" : "36px 28px" }}>
 
         {/* ── Hero ── */}
         <div style={heroStyle}>
@@ -236,16 +238,16 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
             )}
 
             {/* Top row: text left, logo right */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, paddingRight: 44 }}>
+            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "flex-start", justifyContent: "space-between", marginBottom: 16, paddingRight: isMobile ? 36 : 44, gap: isMobile ? 12 : 0 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: `${activeBrand.textColor}99`, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Client Portfolio</div>
-                <div style={{ fontSize: 32, fontWeight: 800, color: activeBrand.textColor, lineHeight: 1.1 }}>{client.name}</div>
+                <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 800, color: activeBrand.textColor, lineHeight: 1.1 }}>{client.name}</div>
                 {activeBrand.tagline && (
-                  <div style={{ fontSize: 14, color: `${activeBrand.textColor}CC`, fontWeight: 500, marginTop: 6 }}>{activeBrand.tagline}</div>
+                  <div style={{ fontSize: 13, color: `${activeBrand.textColor}CC`, fontWeight: 500, marginTop: 6 }}>{activeBrand.tagline}</div>
                 )}
               </div>
               {activeBrand.logoUrl && (
-                <img src={activeBrand.logoUrl} alt="Logo" style={{ maxHeight: 56, maxWidth: 200, objectFit: "contain", flexShrink: 0, marginLeft: 24, marginTop: 2 }} />
+                <img src={activeBrand.logoUrl} alt="Logo" style={{ maxHeight: isMobile ? 40 : 56, maxWidth: isMobile ? 140 : 200, objectFit: "contain", flexShrink: 0, marginLeft: isMobile ? 0 : 24, marginTop: 2 }} />
               )}
             </div>
 
@@ -280,7 +282,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
 
         {/* ── Brand Editor Panel ── */}
         {editing && (
-          <div style={{ background: "#111B2E", border: "1.5px solid #2E3F5C", borderTop: "none", borderRadius: "0 0 14px 14px", padding: "24px 28px", marginBottom: 28 }}>
+          <div style={{ background: "#111B2E", border: "1.5px solid #2E3F5C", borderTop: "none", borderRadius: "0 0 14px 14px", padding: isMobile ? "16px 16px" : "24px 28px", marginBottom: 28 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20 }}>Brand Settings</div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 20, marginBottom: 20 }}>

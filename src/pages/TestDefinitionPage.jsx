@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useBreakpoint } from "../lib/useBreakpoint";
 import AppHeader from "../components/AppHeader";
 import ScreenshotZone from "../components/ScreenshotZone";
 import { generateSVG } from "../lib/svg";
@@ -10,6 +11,7 @@ import { loadScreenshots } from "../db";
 export default function TestDefinitionPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onReplaceTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients, onCreateClient }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isMobile, isTablet } = useBreakpoint();
   const testId = Number(id);
   const test = tests.find(t => t.id === testId);
 
@@ -198,9 +200,9 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
         </div>
       } />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", minHeight: "calc(100vh - 69px)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr" : "1fr 380px", minHeight: isTablet ? undefined : "calc(100vh - 69px)" }}>
         {/* Left – form */}
-        <div style={{ padding: "28px 32px", borderRight: `1px solid ${BORDER}`, overflowY: "auto" }}>
+        <div style={{ padding: isTablet ? "20px 16px" : "28px 32px", borderRight: isTablet ? "none" : `1px solid ${BORDER}`, borderBottom: isTablet ? `1px solid ${BORDER}` : "none", overflowY: "auto" }}>
 
           {/* Paste-to-fill panel */}
           <div style={{ background: "#F0F4FA", border: `1.5px solid #C0CFEA`, borderRadius: 8, marginBottom: 28, overflow: "hidden" }}>
@@ -443,7 +445,7 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
         </div>
 
         {/* Right – preview + actions */}
-        <div style={{ padding: "28px 24px", background: "#F1F5F9", overflowY: "auto" }}>
+        <div style={{ padding: isTablet ? "20px 16px" : "28px 24px", background: "#F1F5F9", overflowY: "auto" }}>
           <SH>Preview</SH>
           <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
             {[{ label: "Client", done: !!test.clientId }, { label: "Name", done: !!test.testName }, { label: "IF", done: !!test.if }, { label: "THEN", done: !!test.then }, { label: "BECAUSE", done: !!test.because }]
@@ -595,12 +597,12 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
             <button onClick={downloadSVG} style={{ background: GOLD, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>⬇ Download SVG</button>
             <button onClick={() => setSvgPreviewOpen(false)} style={{ background: "none", border: "1px solid #2E3F5C", color: "#8BA4C8", padding: "8px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Close</button>
           </div>
-          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-            <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+            <div style={{ flex: 1, overflow: "auto", padding: isMobile ? "12px" : "20px" }}>
               <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`} alt="SVG template preview"
                 style={{ display: "block", width: svgPreviewZoom === "fit" ? "100%" : "1200px", maxWidth: svgPreviewZoom === "fit" ? "100%" : "none", height: "auto", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,.6)" }} />
             </div>
-            <div style={{ width: 230, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
+            <div style={isMobile ? { width: "100%", flexShrink: 0, background: "#111B2E", borderTop: "1px solid #2E3F5C", overflowY: "auto", maxHeight: "40vh", padding: "12px 14px" } : { width: 230, flexShrink: 0, background: "#111B2E", borderLeft: "1px solid #2E3F5C", overflowY: "auto", padding: "16px 14px" }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Screenshots</div>
               {SCREENSHOT_ZONES.map(z => (
                 <ScreenshotZone key={z.key} label={z.label} sub={z.sub}
