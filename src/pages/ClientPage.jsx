@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
 import AppHeader from "../components/AppHeader";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
@@ -73,22 +72,26 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
     finally { setSaving(false); }
   };
 
-  const readFile = async (file, key) => {
+  const readFile = (file, key) => {
     if (!file) return;
-    const ext = file.name.split(".").pop();
-    const path = `clients/${clientId}/${key}.${ext}`;
-    const { error } = await supabase.storage
-      .from("screenshots")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (error) {
-      // Fallback to base64 if upload fails
-      const reader = new FileReader();
-      reader.onload = e => setDraft(d => ({ ...d, [key]: e.target.result }));
-      reader.readAsDataURL(file);
-      return;
-    }
-    const { data: { publicUrl } } = supabase.storage.from("screenshots").getPublicUrl(path);
-    setDraft(d => ({ ...d, [key]: publicUrl }));
+    const isLogo = key === "logoUrl";
+    const maxW = isLogo ? 400 : 1200;
+    const maxH = isLogo ? 200 : 600;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      const ratio = Math.min(maxW / width, maxH / height, 1);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      setDraft(d => ({ ...d, [key]: canvas.toDataURL("image/jpeg", 0.82) }));
+    };
+    img.src = url;
   };
 
   // Use live draft when editing, saved brand otherwise
