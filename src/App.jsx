@@ -217,7 +217,7 @@ export default function App() {
         />
         {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
         <Route
-          path="/portal/:clientId"
+          path="/portal/:id"
           element={
             <PortalContext.Provider value={{ isPortal: true }}>
               <ClientPage
@@ -229,7 +229,7 @@ export default function App() {
           }
         />
         <Route
-          path="/portal/:clientId/tests/:id"
+          path="/portal/:clientId/tests/:testId"
           element={
             <PortalContext.Provider value={{ isPortal: true }}>
               <TestDetailsPage

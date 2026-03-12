@@ -19,7 +19,8 @@ import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_
 import { loadScreenshots } from "../db";
 
 export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params.id ?? params.testId;
   const navigate = useNavigate();
   const { isPortal } = usePortal();
   const test = tests.find(t => t.id === Number(id));
