@@ -12,12 +12,19 @@ const TOOLS = [
   { cmd: "insertUnorderedList", icon: "•—", title: "Bullet list",   style: { fontSize: 14 } },
   { cmd: "insertOrderedList",   icon: "1.", title: "Numbered list", style: { fontWeight: 700, fontSize: 12 } },
   { cmd: "separator" },
+  { cmd: "link",          icon: "🔗",  title: "Insert link",    style: { fontSize: 13 } },
+  { cmd: "image",         icon: "🖼",  title: "Insert image",   style: { fontSize: 13 } },
+  { cmd: "separator" },
   { cmd: "removeFormat",  icon: "✕",   title: "Clear formatting", style: { fontSize: 11, color: MUTED } },
 ];
 
 export default function FindingsEditor({ value, onChange }) {
-  const editorRef = useRef(null);
+  const editorRef  = useRef(null);
+  const imgRef     = useRef(null);
   const [activeFormats, setActiveFormats] = useState({});
+  const [linkPrompt, setLinkPrompt]       = useState(false);
+  const [linkUrl, setLinkUrl]             = useState("");
+  const [linkText, setLinkText]           = useState("");
   const savedSelection = useRef(null);
 
   // Initialise content
@@ -63,8 +70,93 @@ export default function FindingsEditor({ value, onChange }) {
 
   const isActive = (cmd) => activeFormats[cmd] || false;
 
+  // ── Link ──────────────────────────────────────────────────────────────────
+  const openLinkPrompt = () => {
+    saveSelection();
+    const sel = window.getSelection();
+    const selectedText = sel && sel.rangeCount > 0 ? sel.toString() : "";
+    setLinkText(selectedText);
+    setLinkUrl("");
+    setLinkPrompt(true);
+  };
+
+  const insertLink = () => {
+    if (!linkUrl) { setLinkPrompt(false); return; }
+    restoreSelection();
+    const href = linkUrl.startsWith("http") ? linkUrl : `https://${linkUrl}`;
+    const sel = window.getSelection();
+    const hasSelection = sel && sel.rangeCount > 0 && !sel.isCollapsed;
+    if (hasSelection) {
+      document.execCommand("createLink", false, href);
+      // Make it open in new tab
+      const links = editorRef.current.querySelectorAll(`a[href="${href}"]`);
+      links.forEach(a => a.setAttribute("target", "_blank"));
+    } else {
+      const display = linkText || href;
+      restoreSelection();
+      const range = savedSelection.current;
+      if (range) {
+        const a = document.createElement("a");
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = display;
+        range.deleteContents();
+        range.insertNode(a);
+        // Move cursor after the link
+        range.setStartAfter(a);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    editorRef.current?.focus();
+    if (onChange) onChange(editorRef.current.innerHTML);
+    setLinkPrompt(false);
+  };
+
+  // ── Image ─────────────────────────────────────────────────────────────────
+  const openImagePicker = () => {
+    saveSelection();
+    imgRef.current?.click();
+  };
+
+  const handleImageFile = (file) => {
+    if (!file) return;
+    const maxW = 900;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxW) {
+        height = Math.round(height * maxW / width);
+        width = maxW;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      const dataUrl = file.type === "image/png"
+        ? canvas.toDataURL("image/png")
+        : canvas.toDataURL("image/jpeg", 0.85);
+      restoreSelection();
+      document.execCommand("insertImage", false, dataUrl);
+      editorRef.current?.focus();
+      if (onChange) onChange(editorRef.current.innerHTML);
+    };
+    img.src = url;
+  };
+
+  const handleToolClick = (t) => {
+    if (t.cmd === "link")  { openLinkPrompt(); return; }
+    if (t.cmd === "image") { openImagePicker(); return; }
+    saveSelection();
+    execCmd(t.cmd, t.arg);
+  };
+
   return (
-    <div style={{ border: `1.5px solid ${BORDER}`, borderRadius: 8, overflow: "hidden", background: CARD }}>
+    <div style={{ border: `1.5px solid ${BORDER}`, borderRadius: 8, overflow: "hidden", background: CARD, position: "relative" }}>
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "8px 10px", borderBottom: `1px solid ${BORDER}`, background: BG, flexWrap: "wrap" }}>
         {TOOLS.map((t, i) => {
@@ -76,7 +168,7 @@ export default function FindingsEditor({ value, onChange }) {
             <button
               key={i}
               title={t.title}
-              onMouseDown={(e) => { e.preventDefault(); saveSelection(); execCmd(t.cmd, t.arg); }}
+              onMouseDown={(e) => { e.preventDefault(); handleToolClick(t); }}
               style={{
                 ...t.style,
                 background: active ? "#EEF2FF" : "none",
@@ -97,6 +189,43 @@ export default function FindingsEditor({ value, onChange }) {
           );
         })}
       </div>
+
+      {/* Link prompt popover */}
+      {linkPrompt && (
+        <div style={{ position: "absolute", top: 44, left: 10, zIndex: 50, background: "#0D1520", border: `1.5px solid ${BORDER}`, borderRadius: 8, padding: "14px 16px", width: 320, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>Insert Link</div>
+          {!linkText && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Link text</div>
+              <input
+                autoFocus
+                value={linkText}
+                onChange={e => setLinkText(e.target.value)}
+                placeholder="Display text"
+                style={{ width: "100%", background: "#0D1520", border: `1.5px solid ${BORDER}`, borderRadius: 5, padding: "7px 10px", color: TEXT, fontSize: 13, fontFamily: "'Inter',sans-serif", boxSizing: "border-box" }}
+              />
+            </div>
+          )}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>URL</div>
+            <input
+              autoFocus={!!linkText}
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") insertLink(); if (e.key === "Escape") setLinkPrompt(false); }}
+              placeholder="https://example.com"
+              style={{ width: "100%", background: "#0D1520", border: `1.5px solid ${BORDER}`, borderRadius: 5, padding: "7px 10px", color: TEXT, fontSize: 13, fontFamily: "'Inter',sans-serif", boxSizing: "border-box" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={insertLink} style={{ background: ACCENT, color: "#fff", border: "none", borderRadius: 5, padding: "7px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Insert</button>
+            <button onClick={() => setLinkPrompt(false)} style={{ background: "none", border: `1px solid ${BORDER}`, color: MUTED, borderRadius: 5, padding: "7px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden image file input */}
+      <input ref={imgRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImageFile(e.target.files[0])} />
 
       {/* Editable area */}
       <div
@@ -127,6 +256,8 @@ export default function FindingsEditor({ value, onChange }) {
         [contenteditable] ol { padding-left: 22px; margin: 6px 0; }
         [contenteditable] li { margin: 3px 0; }
         [contenteditable] p  { margin: 4px 0; }
+        [contenteditable] a  { color: #60a5fa; text-decoration: underline; cursor: pointer; }
+        [contenteditable] img { max-width: 100%; border-radius: 6px; margin: 8px 0; display: block; }
       `}</style>
     </div>
   );
