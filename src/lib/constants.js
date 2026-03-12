@@ -62,6 +62,7 @@ export const OVERLAY_TYPES = [
   { label: "Sticky Element",color: "#F39C12" },
   { label: "CTA Highlight", color: "#1ABC9C" },
   { label: "Brand Accent",  color: "#E91E63" },
+  { label: "Annotation",    color: "#F59E0B", isAnnotation: true },
 ];
 
 export const SCREENSHOT_ZONES = [

@@ -647,7 +647,9 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   if (moveId) {
                     updateActiveOverlays(prev => prev.map(x => x.id === Number(moveId) ? { ...x, relX, relY } : x));
                   } else {
-                    updateActiveOverlays(prev => [...prev, { id: Date.now(), ...ot, relX, relY, note: "" }]);
+                    const newId = Date.now();
+                    updateActiveOverlays(prev => [...prev, { id: newId, ...ot, relX, relY, note: "" }]);
+                    if (ot.isAnnotation) { setEditingNote(""); setEditingOverlayId(newId); }
                   }
                 }}
               >
@@ -703,47 +705,72 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 })()}
                 {activeOverlays.map(p => (
                   <Fragment key={p.id}>
-                    {/* Marker circle */}
+                    {/* Marker */}
                     <div
                       draggable
                       onDragStart={e => {
                         e.stopPropagation();
                         if (editingOverlayId === p.id) { e.preventDefault(); return; }
                         e.dataTransfer.setData("overlayMove", p.id.toString());
-                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color }));
+                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation }));
                       }}
                       onClick={() => {
                         setEditingNote(p.note || "");
                         setEditingOverlayId(editingOverlayId === p.id ? null : p.id);
                       }}
-                      title={`${p.label}${p.note ? `: ${p.note}` : ""} — drag to reposition · click to annotate`}
+                      title={`${p.label}${p.note ? `: ${p.note}` : ""} — drag to reposition · click to edit`}
                       style={{
                         position: "absolute",
                         left: `${p.relX * 100}%`,
                         top: `${p.relY * 100}%`,
-                        transform: "translate(-50%, -50%)",
-                        width: 26,
-                        height: 26,
-                        borderRadius: "50%",
-                        background: p.color,
-                        border: `2.5px solid ${editingOverlayId === p.id ? "#fff" : "white"}`,
-                        outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        fontWeight: 800,
-                        color: "#fff",
-                        cursor: "grab",
-                        boxShadow: "0 2px 10px rgba(0,0,0,.5)",
+                        transform: p.isAnnotation ? "translate(-50%, -100%)" : "translate(-50%, -50%)",
                         zIndex: editingOverlayId === p.id ? 30 : 10,
-                        fontFamily: "'Inter',sans-serif",
+                        cursor: "grab",
                         userSelect: "none",
+                        ...(p.isAnnotation ? {} : {
+                          width: 26, height: 26, borderRadius: "50%",
+                          background: p.color,
+                          border: `2.5px solid ${editingOverlayId === p.id ? "#fff" : "white"}`,
+                          outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, fontWeight: 800, color: "#fff",
+                          boxShadow: "0 2px 10px rgba(0,0,0,.5)",
+                          fontFamily: "'Inter',sans-serif",
+                        }),
                       }}
                     >
-                      {p.label[0]}
-                      {p.note && (
-                        <div style={{ position: "absolute", bottom: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: "white", border: `1.5px solid ${p.color}` }} />
+                      {p.isAnnotation ? (
+                        <div style={{
+                          background: p.color,
+                          color: "#fff",
+                          borderRadius: 6,
+                          padding: "5px 9px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fontFamily: "'Inter',sans-serif",
+                          maxWidth: 180,
+                          boxShadow: "0 2px 10px rgba(0,0,0,.5)",
+                          border: editingOverlayId === p.id ? "2px solid #fff" : "2px solid transparent",
+                          outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
+                          whiteSpace: p.note ? "normal" : "nowrap",
+                          lineHeight: 1.4,
+                        }}>
+                          {p.note || "✎ Add note…"}
+                          {/* callout pointer */}
+                          <div style={{
+                            position: "absolute", bottom: -7, left: "50%", transform: "translateX(-50%)",
+                            width: 0, height: 0,
+                            borderLeft: "7px solid transparent", borderRight: "7px solid transparent",
+                            borderTop: `7px solid ${p.color}`,
+                          }} />
+                        </div>
+                      ) : (
+                        <>
+                          {p.label[0]}
+                          {p.note && (
+                            <div style={{ position: "absolute", bottom: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: "white", border: `1.5px solid ${p.color}` }} />
+                          )}
+                        </>
                       )}
                     </div>
 
