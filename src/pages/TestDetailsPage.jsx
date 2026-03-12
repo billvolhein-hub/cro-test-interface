@@ -38,6 +38,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [editingNote, setEditingNote] = useState("");
   const [dragOverZone, setDragOverZone] = useState(null);
   const lastDropTime = useRef(0);
+  const [clientNoteInput, setClientNoteInput] = useState("");
   const [findingsEditing, setFindingsEditing] = useState(false);
   const [findingsAiLoading, setFindingsAiLoading] = useState(false);
   const [findingsAiError, setFindingsAiError] = useState("");
@@ -339,6 +340,64 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 <TestResults results={test.results ?? null} onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)} onClear={() => onUpdateTest(Number(id), "results", null)} />
               </div>
             )}
+
+            {/* Client Notes */}
+            {(() => {
+              const notes = test.clientNotes ?? [];
+              const addNote = () => {
+                const trimmed = clientNoteInput.trim();
+                if (!trimmed) return;
+                const updated = [...notes, { id: Date.now(), note: trimmed }];
+                onUpdateTest(Number(id), "clientNotes", updated);
+                setClientNoteInput("");
+              };
+              return (
+                <div style={{ background: CARD, border: "1.5px solid #DDD6FE", borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(124,58,237,.08)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Client Notes</div>
+                  {notes.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      {notes.map(n => (
+                        <div key={n.id} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#7C3AED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 2h8v7l-4 2-4-2V2z" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
+                              <path d="M4 5h4M4 7h2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round"/>
+                            </svg>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6 }}>{n.note}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                              <span style={{ fontSize: 10, color: MUTED }}>{fmtDate(n.id)}</span>
+                              {!isPortal && (
+                                <button
+                                  onClick={() => onUpdateTest(Number(id), "clientNotes", notes.filter(x => x.id !== n.id))}
+                                  style={{ fontSize: 10, color: "#DC2626", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                                >Remove</button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <textarea
+                      value={clientNoteInput}
+                      onChange={e => setClientNoteInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addNote(); } }}
+                      placeholder="Leave a note…"
+                      rows={2}
+                      style={{ flex: 1, border: `1.5px solid #DDD6FE`, borderRadius: 6, padding: "8px 10px", fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, resize: "none", outline: "none", lineHeight: 1.5 }}
+                    />
+                    <button
+                      onClick={addNote}
+                      style={{ alignSelf: "flex-end", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                    >Post</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: MUTED, marginTop: 6 }}>Enter to post · Shift+Enter for new line</div>
+                </div>
+              );
+            })()}
 
             {/* Hypothesis */}
             {(() => {
@@ -678,7 +737,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                     lastDropTime.current = now;
                     const newId = now;
                     updateActiveOverlays(prev => [...prev, { id: newId, ...ot, relX, relY, note: "" }]);
-                    if (ot.isAnnotation || ot.isClientNote) { setEditingNote(""); setEditingOverlayId(newId); }
+                    if (ot.isAnnotation) { setEditingNote(""); setEditingOverlayId(newId); }
                   }
                 }}
               >
@@ -741,7 +800,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         e.stopPropagation();
                         if (editingOverlayId === p.id) { e.preventDefault(); return; }
                         e.dataTransfer.setData("overlayMove", p.id.toString());
-                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation, isClientNote: p.isClientNote }));
+                        e.dataTransfer.setData("overlayType", JSON.stringify({ label: p.label, color: p.color, isAnnotation: p.isAnnotation }));
                       }}
                       onClick={() => {
                         setEditingNote(p.note || "");
@@ -931,7 +990,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   <div
                     key={o.label}
                     draggable
-                    onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: o.label, color: o.color, isAnnotation: o.isAnnotation, isClientNote: o.isClientNote }))}
+                    onDragStart={e => e.dataTransfer.setData("overlayType", JSON.stringify({ label: o.label, color: o.color, isAnnotation: o.isAnnotation }))}
                     style={{
                       display: "flex", alignItems: "center", gap: 8,
                       padding: "7px 10px", borderRadius: 6,

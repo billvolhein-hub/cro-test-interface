@@ -55,7 +55,6 @@ export const PIE_CRITERIA = [
 ];
 
 export const OVERLAY_TYPES = [
-  { label: "Client Note",   color: "#7C3AED", isClientNote: true },
   { label: "Add/Blur",      color: "#4A90D9" },
   { label: "Removed",       color: "#E74C3C" },
   { label: "Copy Change",   color: "#2ECC71" },

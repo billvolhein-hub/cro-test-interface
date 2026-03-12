@@ -11,12 +11,8 @@ export function collectClientNotes(tests, clientId) {
   const notes = [];
   const pool = clientId != null ? tests.filter(t => t.clientId === clientId) : tests;
   for (const test of pool) {
-    for (const [variant, overlays] of Object.entries(test.overlays ?? {})) {
-      for (const overlay of overlays ?? []) {
-        if (overlay.isClientNote && overlay.note) {
-          notes.push({ test, variant, overlay, ts: overlay.id });
-        }
-      }
+    for (const note of test.clientNotes ?? []) {
+      if (note.note) notes.push({ test, note, ts: note.id });
     }
   }
   return notes.sort((a, b) => b.ts - a.ts);
@@ -68,14 +64,14 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
       {/* Feed */}
       {!collapsed && (
         <div style={{ maxHeight: 340, overflowY: "auto" }}>
-          {notes.map(({ test, variant, overlay }) => {
+          {notes.map(({ test, note }) => {
             const client = clients?.find(c => c.id === test.clientId);
             const testUrl = isPortal
               ? `/portal/${toSlug(client?.name)}/tests/${toSlug(test.testName)}`
               : `/tests/${test.id}`;
             return (
               <div
-                key={overlay.id}
+                key={note.id}
                 style={{ display: "flex", gap: 12, padding: "12px 18px", borderBottom: `1px solid ${NOTE_BORDER}`, alignItems: "flex-start" }}
               >
                 {/* Avatar */}
@@ -89,7 +85,7 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
                 {/* Body */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.5, marginBottom: 5 }}>
-                    {overlay.note}
+                    {note.note}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <button
@@ -98,10 +94,10 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
                     >
                       {test.testName || "Untitled Test"}
                     </button>
-                    {!clientId && client && (
+                    {client && (
                       <span style={{ fontSize: 11, color: MUTED }}>{client.name}</span>
                     )}
-                    <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>{timeAgo(overlay.id)}</span>
+                    <span style={{ fontSize: 10, color: MUTED, marginLeft: "auto" }}>{timeAgo(note.id)}</span>
                   </div>
                 </div>
               </div>
