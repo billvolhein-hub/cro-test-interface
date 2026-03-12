@@ -173,81 +173,86 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
       <div style={{ padding: isMobile ? "16px 16px 28px" : "28px 28px 36px", overflowX: "hidden" }}>
 
         {/* Client filter bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          {[{ id: "all", name: "All Clients" }, ...clients].map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 20, overflow: "hidden", border: "1.5px solid", transition: "all .15s", borderColor: activeClientId === c.id ? ACCENT : BORDER }}>
-              <button onClick={() => selectClient(c.id)}
-                style={{ padding: "6px 14px", fontSize: 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", transition: "all .15s", background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED }}>
-                {c.name}
-              </button>
-              {c.id !== "all" && (
-                <button onClick={() => navigate(`/clients/${c.id}`)} title={`${c.name} portfolio`}
-                  style={{ padding: "6px 10px", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", borderLeft: `1px solid ${activeClientId === c.id ? "rgba(255,255,255,.3)" : BORDER}`, background: activeClientId === c.id ? "#142d54" : "#F7F8FA", color: activeClientId === c.id ? "rgba(255,255,255,.8)" : MUTED, transition: "all .15s" }}>
-                  ↗
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {[{ id: "all", name: "All Clients" }, ...clients].map((c) => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 20, overflow: "hidden", border: "1.5px solid", transition: "all .15s", borderColor: activeClientId === c.id ? ACCENT : BORDER }}>
+                <button onClick={() => selectClient(c.id)}
+                  style={{ padding: isMobile ? "5px 10px" : "6px 14px", fontSize: isMobile ? 12 : 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", transition: "all .15s", background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED }}>
+                  {c.name}
                 </button>
-              )}
-            </div>
-          ))}
-          <button onClick={() => setClientsModalOpen(true)}
-            style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: "none", border: `1.5px solid ${BORDER}`, color: MUTED }}>
-            Manage Clients
-          </button>
+                {c.id !== "all" && (
+                  <button onClick={() => navigate(`/clients/${c.id}`)} title={`${c.name} portfolio`}
+                    style={{ padding: isMobile ? "5px 8px" : "6px 10px", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", borderLeft: `1px solid ${activeClientId === c.id ? "rgba(255,255,255,.3)" : BORDER}`, background: activeClientId === c.id ? "#142d54" : "#F7F8FA", color: activeClientId === c.id ? "rgba(255,255,255,.8)" : MUTED, transition: "all .15s" }}>
+                    ↗
+                  </button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => setClientsModalOpen(true)}
+              style={{ marginLeft: isMobile ? 0 : "auto", padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: "none", border: `1.5px solid ${BORDER}`, color: MUTED }}>
+              Manage Clients
+            </button>
+          </div>
         </div>
 
         {/* Client title bar */}
-        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "16px 22px", marginBottom: 24, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: activeClientId === "all" ? BG : "#EEF2FF", border: `1.5px solid ${activeClientId === "all" ? BORDER : "#C7D2FE"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="6" width="14" height="9" rx="1.5" stroke={activeClientId === "all" ? MUTED : "#6D28D9"} strokeWidth="1.4"/>
-              <path d="M5 6V4.5a3 3 0 016 0V6" stroke={activeClientId === "all" ? MUTED : "#6D28D9"} strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>
-              {activeClientId === "all" ? "All Clients" : (activeClientName || "Client")}
+        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: isMobile ? "14px 16px" : "16px 22px", marginBottom: 24, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? 12 : 16, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+          {/* Icon + title */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: activeClientId === "all" ? BG : "#EEF2FF", border: `1.5px solid ${activeClientId === "all" ? BORDER : "#C7D2FE"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="1" y="6" width="14" height="9" rx="1.5" stroke={activeClientId === "all" ? MUTED : "#6D28D9"} strokeWidth="1.4"/>
+                <path d="M5 6V4.5a3 3 0 016 0V6" stroke={activeClientId === "all" ? MUTED : "#6D28D9"} strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
             </div>
-            <div style={{ fontSize: 12, color: MUTED, fontWeight: 500, marginTop: 2 }}>
-              {sorted.length} test{sorted.length !== 1 ? "s" : ""}
-              {activeClientId === "all" && clients.length > 0 && ` across ${clients.length} client${clients.length !== 1 ? "s" : ""}`}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>
+                {activeClientId === "all" ? "All Clients" : (activeClientName || "Client")}
+              </div>
+              <div style={{ fontSize: 12, color: MUTED, fontWeight: 500, marginTop: 2 }}>
+                {sorted.length} test{sorted.length !== 1 ? "s" : ""}
+                {activeClientId === "all" && clients.length > 0 && ` across ${clients.length} client${clients.length !== 1 ? "s" : ""}`}
+              </div>
             </div>
+            {/* AVG PIE badge — inline with title on both mobile and desktop */}
+            {(() => {
+              const scored = sorted.filter(t => t.potential || t.importance || t.ease);
+              if (scored.length === 0) return null;
+              const avg = (scored.reduce((sum, t) => sum + Number(pieScore(t)), 0) / scored.length).toFixed(1);
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                  <div style={{ background: scoreBg(avg), border: `1.5px solid ${scoreBorder(avg)}`, color: scoreColor(avg), borderRadius: 8, padding: isMobile ? "4px 10px" : "6px 14px", fontSize: isMobile ? 16 : 20, fontWeight: 800, lineHeight: 1 }}>{avg}</div>
+                  <div style={{ fontSize: 10, color: MUTED, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>Avg PIE</div>
+                </div>
+              );
+            })()}
           </div>
+          {/* Action buttons */}
           {activeClientId === "all" ? (
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-              <button className="imp-btn" onClick={() => { setImportError(""); csvRef.current?.click(); }}>
+              <button className="imp-btn" onClick={() => { setImportError(""); csvRef.current?.click(); }} style={isMobile ? { flex: 1, justifyContent: "center" } : {}}>
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2M8 1v8M5 6l3 3 3-3" stroke={ACCENT} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 Import CSV
               </button>
-              <button className="new-btn" onClick={handleNew}>
+              <button className="new-btn" onClick={handleNew} style={isMobile ? { flex: 1, justifyContent: "center" } : {}}>
                 <span style={{ fontSize: 20, lineHeight: 1, marginTop: -1 }}>+</span> New Test
               </button>
             </div>
           ) : (
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <button onClick={() => navigate(`/clients/${activeClientId}`)}
-                style={{ background: ACCENT, color: "#fff", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                Client Portfolio →
+                style={{ background: ACCENT, color: "#fff", border: "none", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", flex: isMobile ? 1 : undefined }}>
+                Portfolio →
               </button>
               <button onClick={() => selectClient("all")}
-                style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                ← All Clients
+                style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                ← All
               </button>
             </div>
           )}
-          {(() => {
-            const scored = sorted.filter(t => t.potential || t.importance || t.ease);
-            if (scored.length === 0) return null;
-            const avg = (scored.reduce((sum, t) => sum + Number(pieScore(t)), 0) / scored.length).toFixed(1);
-            return (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                <div style={{ background: scoreBg(avg), border: `1.5px solid ${scoreBorder(avg)}`, color: scoreColor(avg), borderRadius: 8, padding: "6px 14px", fontSize: 20, fontWeight: 800, lineHeight: 1 }}>
-                  {avg}
-                </div>
-                <div style={{ fontSize: 10, color: MUTED, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>Avg PIE</div>
-              </div>
-            );
-          })()}
         </div>
 
         {/* Client Notes feed */}
