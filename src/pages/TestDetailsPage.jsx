@@ -53,7 +53,9 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const VARIANT_LETTERS = ["B","C","D","E","F","G","H"];
   const VARIANT_COLORS_MAP = { B:"#C9A84C", C:"#2A8C8C", D:"#6D28D9", E:"#E74C3C", F:"#2ECC71", G:"#F39C12", H:"#E91E63" };
   const variants = test?.variants ?? ["B"];
-  const activeOverlays = overlaysByVariant[activeVariant] ?? [];
+  // Deduplicate by id — guards against StrictMode double-mount creating duplicates
+  const dedupeOverlays = (arr) => [...new Map((arr ?? []).map(o => [o.id, o])).values()];
+  const activeOverlays = dedupeOverlays(overlaysByVariant[activeVariant]);
 
   function variantScreenshotKeys(label) {
     return label === "B"
@@ -65,8 +67,8 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     setSvgContent(generateSVG(test, screenshotsMap[test?.id] || {}, byVariant));
 
   const updateActiveOverlays = (updater) => {
-    const current = overlaysByVariant[activeVariant] ?? [];
-    const next = typeof updater === "function" ? updater(current) : updater;
+    const current = dedupeOverlays(overlaysByVariant[activeVariant]);
+    const next = dedupeOverlays(typeof updater === "function" ? updater(current) : updater);
     const updated = { ...overlaysByVariant, [activeVariant]: next };
     setOverlaysByVariant(updated);
     rebuildSvg(updated);
