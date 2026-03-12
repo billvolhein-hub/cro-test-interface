@@ -399,7 +399,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverStatus(lane.key); }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverStatus(null); }}
                 onDrop={() => handleDrop(lane.dropStatus)}
-                style={{ flex: 1, minWidth: 240, display: "flex", flexDirection: "column", borderRadius: 10, transition: "background .15s", background: isDropTarget ? lane.bg : "transparent", outline: isDropTarget ? `2px dashed ${lane.border}` : "2px dashed transparent", outlineOffset: 2 }}>
+                style={{ flex: 1, minWidth: isMobile ? "100%" : 240, width: isMobile ? "100%" : undefined, display: "flex", flexDirection: "column", borderRadius: 10, transition: "background .15s", background: isDropTarget ? lane.bg : "transparent", outline: isDropTarget ? `2px dashed ${lane.border}` : "2px dashed transparent", outlineOffset: 2 }}>
                 {/* Column header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "10px 14px", background: lane.bg, border: `1.5px solid ${isDropTarget ? lane.color : lane.border}`, borderRadius: 8, transition: "border-color .15s" }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: lane.color, letterSpacing: 1, textTransform: "uppercase", flex: 1 }}>{lane.label}</span>
@@ -430,10 +430,8 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
           return (
             <>
               {/* Kanban board */}
-              <div style={{ overflowX: isMobile ? "auto" : "visible", margin: isMobile ? "0 -16px" : 0, padding: isMobile ? "0 16px 8px" : 0 }}>
-                <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: completed.length > 0 ? 32 : 0, minWidth: isMobile ? "fit-content" : undefined }}>
-                  {LANES.map(renderLane)}
-                </div>
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 14, alignItems: "flex-start", marginBottom: completed.length > 0 ? 32 : 0 }}>
+                {LANES.map(renderLane)}
               </div>
 
               {/* Test Complete section */}
