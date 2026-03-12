@@ -37,6 +37,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [editingOverlayId, setEditingOverlayId] = useState(null);
   const [editingNote, setEditingNote] = useState("");
   const [dragOverZone, setDragOverZone] = useState(null);
+  const lastDropTime = useRef(0);
   const [findingsEditing, setFindingsEditing] = useState(false);
   const [findingsAiLoading, setFindingsAiLoading] = useState(false);
   const [findingsAiError, setFindingsAiError] = useState("");
@@ -662,6 +663,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 onDragOver={e => e.preventDefault()}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
                 onDrop={e => {
+                  const now = Date.now();
                   const moveId = e.dataTransfer.getData("overlayMove");
                   const raw = e.dataTransfer.getData("overlayType");
                   if (!raw) return;
@@ -672,9 +674,11 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   if (moveId) {
                     updateActiveOverlays(prev => prev.map(x => x.id === Number(moveId) ? { ...x, relX, relY } : x));
                   } else {
-                    const newId = Date.now();
+                    if (now - lastDropTime.current < 300) return;
+                    lastDropTime.current = now;
+                    const newId = now;
                     updateActiveOverlays(prev => [...prev, { id: newId, ...ot, relX, relY, note: "" }]);
-                    if (ot.isAnnotation) { setEditingNote(""); setEditingOverlayId(newId); }
+                    if (ot.isAnnotation || ot.isClientNote) { setEditingNote(""); setEditingOverlayId(newId); }
                   }
                 }}
               >
@@ -748,11 +752,11 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         position: "absolute",
                         left: `${p.relX * 100}%`,
                         top: `${p.relY * 100}%`,
-                        transform: (p.isAnnotation || p.isClientNote) ? "translate(-50%, -100%)" : "translate(-50%, -50%)",
-                        zIndex: p.isClientNote ? (editingOverlayId === p.id ? 40 : 20) : editingOverlayId === p.id ? 30 : 10,
+                        transform: p.isAnnotation ? "translate(-50%, -100%)" : "translate(-50%, -50%)",
+                        zIndex: editingOverlayId === p.id ? 30 : 10,
                         cursor: "grab",
                         userSelect: "none",
-                        ...(!p.isAnnotation && !p.isClientNote ? {
+                        ...(!p.isAnnotation ? {
                           width: 26, height: 26, borderRadius: "50%",
                           background: p.color,
                           border: `2.5px solid ${editingOverlayId === p.id ? "#fff" : "white"}`,
@@ -764,33 +768,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                         } : {}),
                       }}
                     >
-                      {p.isClientNote ? (
-                        <div style={{ position: "relative", visibility: editingOverlayId === p.id ? "hidden" : "visible" }}>
-                          <div style={{
-                            background: p.color,
-                            color: "#fff",
-                            borderRadius: 7,
-                            padding: "7px 11px 7px 9px",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            fontFamily: "'Inter',sans-serif",
-                            maxWidth: 200,
-                            boxShadow: "0 3px 14px rgba(124,58,237,.5)",
-                            border: editingOverlayId === p.id ? "2px solid #fff" : "2px solid rgba(255,255,255,.3)",
-                            outline: editingOverlayId === p.id ? `2px solid ${p.color}` : "none",
-                            whiteSpace: p.note ? "normal" : "nowrap",
-                            lineHeight: 1.4,
-                            display: "flex", alignItems: "flex-start", gap: 6,
-                          }}>
-                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                              <path d="M2 2h8v7l-4 2-4-2V2z" stroke="#fff" strokeWidth="1.3" strokeLinejoin="round"/>
-                              <path d="M4 5h4M4 7h2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round"/>
-                            </svg>
-                            {p.note || "✎ Client note…"}
-                          </div>
-                          <div style={{ position: "absolute", bottom: -7, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: `7px solid ${p.color}` }} />
-                        </div>
-                      ) : p.isAnnotation ? (
+                      {p.isAnnotation ? (
                         <div style={{
                           background: p.color,
                           color: "#fff",
