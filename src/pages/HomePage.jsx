@@ -12,7 +12,7 @@ const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_ST
 
 // Defined inside component (see below) so it captures live `clients` from scope.
 
-export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
+export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
   const navigate = useNavigate();
   const { isMobile, isTablet } = useBreakpoint();
   const [confirmDelete,    setConfirmDelete]    = useState(null);
@@ -275,6 +275,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
           clientId={activeClientId === "all" ? null : activeClientId}
           collapsed={!notesFeedOpen}
           onToggle={() => setNotesFeedOpen(v => !v)}
+          onUpdateTest={onUpdateTest}
         />
 
         {/* Import feedback */}

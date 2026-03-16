@@ -964,6 +964,17 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                             Remove
                           </button>
                         </div>
+                        {p.isClientNote && (
+                          <button
+                            onClick={() => {
+                              updateActiveOverlays(prev => prev.map(x => x.id === p.id ? { ...x, resolved: !x.resolved } : x));
+                              setEditingOverlayId(null);
+                            }}
+                            style={{ width: "100%", marginTop: 6, background: p.resolved ? "#1A2540" : "#0F2A1A", border: `1px solid ${p.resolved ? "#3B2A5C" : "#166534"}`, color: p.resolved ? "#9F7AEA" : "#4ADE80", padding: "6px 0", borderRadius: 5, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            {p.resolved ? "↩ Unresolve" : "✓ Mark Resolved"}
+                          </button>
+                        )}
                         <div style={{ marginTop: 8, fontSize: 9, color: "#3A5070" }}>Enter to save · Esc to cancel</div>
                       </div>
                     )}
@@ -986,12 +997,18 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   <span style={{ fontSize: 12, color: "#C8D8EE", fontWeight: 500 }}>Client Note</span>
                 </div>
                 {activeOverlays.filter(o => o.isClientNote).map(o => (
-                  <div key={o.id} style={{ background: "#160F2A", border: "1px solid #3B2A5C", borderRadius: 6, padding: "8px 10px", marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, color: "#C8B8F0", lineHeight: 1.5, marginBottom: 4 }}>{o.note || <span style={{ color: "#4A3A6A", fontStyle: "italic" }}>No note yet</span>}</div>
-                    <button
-                      onClick={() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }}
-                      style={{ fontSize: 10, color: "#9F7AEA", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
-                    >Edit</button>
+                  <div key={o.id} style={{ background: o.resolved ? "#0E1520" : "#160F2A", border: `1px solid ${o.resolved ? "#1E2F48" : "#3B2A5C"}`, borderRadius: 6, padding: "8px 10px", marginBottom: 6, opacity: o.resolved ? 0.6 : 1 }}>
+                    <div style={{ fontSize: 11, color: o.resolved ? "#4A6080" : "#C8B8F0", lineHeight: 1.5, marginBottom: 4, textDecoration: o.resolved ? "line-through" : "none" }}>{o.note || <span style={{ color: "#4A3A6A", fontStyle: "italic" }}>No note yet</span>}</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => { setEditingNote(o.note || ""); setEditingOverlayId(o.id); }}
+                        style={{ fontSize: 10, color: "#9F7AEA", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                      >Edit</button>
+                      <button
+                        onClick={() => updateActiveOverlays(prev => prev.map(x => x.id === o.id ? { ...x, resolved: !x.resolved } : x))}
+                        style={{ fontSize: 10, color: o.resolved ? "#9F7AEA" : "#4ADE80", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'Inter',sans-serif" }}
+                      >{o.resolved ? "↩ Unresolve" : "✓ Resolve"}</button>
+                    </div>
                   </div>
                 ))}
                 {activeOverlays.filter(o => o.isClientNote).length > 0 && (

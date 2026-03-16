@@ -27,7 +27,7 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
+export default function ClientPage({ clients, tests, onUpdateTest, onUpdateClientBrand }) {
   const { id, clientSlug } = useParams();
   const navigate = useNavigate();
   const { isPortal } = usePortal();
@@ -429,6 +429,7 @@ export default function ClientPage({ clients, tests, onUpdateClientBrand }) {
           tests={clientTests}
           clients={[client]}
           clientId={clientId}
+          onUpdateTest={onUpdateTest}
         />
 
         {/* Tests grouped by stage — display order: Live, In Work, Backlog, Complete */}

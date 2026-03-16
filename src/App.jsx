@@ -173,6 +173,7 @@ export default function App() {
               onCreateTest={onCreateTest}
               onCreateTests={onCreateTests}
               onDeleteTest={onDeleteTest}
+              onUpdateTest={onUpdateTest}
               clients={clients}
               onCreateClient={onCreateClient}
               onCreateClients={onCreateClients}
@@ -221,6 +222,7 @@ export default function App() {
             <ClientPage
               clients={clients}
               tests={tests}
+              onUpdateTest={onUpdateTest}
               onUpdateClientBrand={onUpdateClientBrand}
             />
           }
