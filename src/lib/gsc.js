@@ -24,7 +24,7 @@ export async function getGSCToken() {
         else resolve(response.access_token);
       },
     });
-    client.requestAccessToken({ prompt: "consent" });
+    client.requestAccessToken({ prompt: "select_account" });
   });
 }
 
