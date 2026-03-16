@@ -399,6 +399,7 @@ export async function fetchConvertResults(experienceId) {
     const expRes = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
     if (expRes.ok) {
       const ed = await expRes.json();
+      console.log("[Convert] experience response:", JSON.stringify(ed).slice(0, 2000));
       const expData = ed?.data ?? ed;
       const goals = expData?.goals ?? expData?.data?.goals ?? [];
       if (Array.isArray(goals) && goals.length) {
@@ -414,6 +415,7 @@ export async function fetchConvertResults(experienceId) {
     const goalsRes = await fetch(`${proxyBase}/goals`, { headers: goalsHeaders });
     if (goalsRes.ok) {
       const gd = await goalsRes.json();
+      console.log("[Convert] goals response:", JSON.stringify(gd).slice(0, 2000));
       const list = gd?.data ?? gd ?? [];
       if (Array.isArray(list)) {
         for (const g of list) {
@@ -422,6 +424,8 @@ export async function fetchConvertResults(experienceId) {
       }
     }
   } catch { /* non-fatal */ }
+
+  console.log("[Convert] resolved goalNames:", goalNames);
 
   // ── 2. Fetch aggregated report ────────────────────────────────────────────
   const reportTarget = `${base}/experiences/${experienceId}/aggregated_report`;
