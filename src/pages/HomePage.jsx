@@ -315,7 +315,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             const isSelected = selectedIds.has(t.id);
             const isHighPie = s >= 6.0;
             const isDragging = draggingId === t.id;
-            const isExpanded = activeClientId !== "all" || expandedCards.has(t.id);
+            const isExpanded = !expandedCards.has(t.id);
             return (
               <div key={t.id}
                 draggable
