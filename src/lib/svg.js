@@ -19,10 +19,18 @@ function escXml(s) {
 
 function wrap(text, maxChars) {
   if (!text) return ["—"];
-  const words = text.split(" ");
+  // Hard-break any word longer than maxChars (e.g. long URLs)
+  const tokens = [];
+  for (const word of text.split(" ")) {
+    if (word.length > maxChars) {
+      for (let i = 0; i < word.length; i += maxChars) tokens.push(word.slice(i, i + maxChars));
+    } else {
+      tokens.push(word);
+    }
+  }
   const lines = [];
   let line = "";
-  for (const word of words) {
+  for (const word of tokens) {
     const candidate = line ? line + " " + word : word;
     if (candidate.length > maxChars) { if (line) lines.push(line); line = word; }
     else line = candidate;
