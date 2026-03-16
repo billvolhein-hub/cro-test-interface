@@ -5,6 +5,7 @@ const SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 // redirect_uri must be added to the OAuth client's Authorized Redirect URIs in Google Cloud Console.
 export function getGSCToken() {
   const redirectUri = `${window.location.origin}/auth/callback`;
+  console.log("[GSC OAuth] redirect_uri:", redirectUri);
 
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
