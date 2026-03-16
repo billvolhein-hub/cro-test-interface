@@ -125,6 +125,11 @@ function GoalCard({ goal, variantOrder }) {
         </div>
       )}
 
+      {/* Description */}
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+        Showing <strong style={{ color: TEXT }}>conversion rate lift</strong> vs. control. Bars extend right (green) for gains and left (red) for losses. Badge shows % change; rate is absolute conversion rate.
+      </div>
+
       {/* Variant lift rows */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {variants.map((row, i) => {
