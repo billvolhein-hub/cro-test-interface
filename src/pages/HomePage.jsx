@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import ClientsModal from "../components/ClientsModal";
+import IdeationModal from "../components/IdeationModal";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, parseCSVMulti, mapCSVToTest } from "../lib/utils";
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, ACCENT, BG, CARD, BORDER, TEXT, MUTED, DIM, TEAL } from "../lib/constants";
@@ -11,7 +12,7 @@ const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_ST
 
 // Defined inside component (see below) so it captures live `clients` from scope.
 
-export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient }) {
+export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
   const navigate = useNavigate();
   const { isMobile, isTablet } = useBreakpoint();
   const [confirmDelete,    setConfirmDelete]    = useState(null);
@@ -26,6 +27,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
   const [dragOverStatus,   setDragOverStatus]   = useState(null);
   const [expandedCards,    setExpandedCards]    = useState(new Set());
   const [notesFeedOpen,    setNotesFeedOpen]    = useState(true);
+  const [ideationOpen,     setIdeationOpen]     = useState(false);
 
   const toggleCard = (id, e) => { e.stopPropagation(); setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
 
@@ -81,6 +83,17 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
     const t = blankTest();
     const saved = await onCreateTest(t);
     navigate(`/tests/${saved.id}/edit`);
+  };
+
+  const handleIdeationSelect = async (testData, screenshots) => {
+    const clientId = activeClientId !== "all" ? activeClientId : (clients[0]?.id ?? null);
+    const t = { ...blankTest(), clientId, ...testData };
+    const saved = await onCreateTest(t);
+    if (screenshots && Object.keys(screenshots).length) {
+      await onSaveScreenshots(saved.id, screenshots);
+    }
+    setIdeationOpen(false);
+    navigate(`/tests/${saved.id}?template=1`);
   };
 
   const handleMassImport = (file) => {
@@ -237,7 +250,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                 </svg>
                 Import CSV
               </button>
-              <button className="new-btn" onClick={handleNew} style={isMobile ? { flex: 1, justifyContent: "center" } : {}}>
+              <button className="new-btn" onClick={() => setIdeationOpen(true)} style={isMobile ? { flex: 1, justifyContent: "center" } : {}}>
                 <span style={{ fontSize: 20, lineHeight: 1, marginTop: -1 }}>+</span> New Test
               </button>
             </div>
@@ -286,7 +299,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No tests yet</div>
             <div style={{ fontSize: 14, marginBottom: 24 }}>Create a new test or import from a CSV spreadsheet.</div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button className="new-btn" onClick={handleNew} style={{ display: "inline-flex" }}>+ New Test</button>
+              <button className="new-btn" onClick={() => setIdeationOpen(true)} style={{ display: "inline-flex" }}>+ New Test</button>
               <button className="imp-btn" onClick={() => csvRef.current?.click()} style={{ display: "inline-flex" }}>Import CSV</button>
             </div>
           </div>
@@ -486,6 +499,15 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
           </button>
         </div>
       )}
+
+      <IdeationModal
+        open={ideationOpen}
+        onClose={() => setIdeationOpen(false)}
+        onSelectBlank={handleNew}
+        onSelectRecommendation={handleIdeationSelect}
+        clients={clients}
+        activeClientId={activeClientId}
+      />
 
       {clientsModalOpen && (
         <ClientsModal

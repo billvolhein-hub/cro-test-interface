@@ -138,6 +138,14 @@ export default function App() {
     await saveScreenshots(testId, next);
   };
 
+  // Save multiple zones at once — avoids the race condition of parallel onSaveScreenshot calls
+  const onSaveScreenshots = async (testId, zonesObj) => {
+    const current = screenshotsMap[testId] ?? {};
+    const next = { ...current, ...zonesObj };
+    setScreenshotsMap((prev) => ({ ...prev, [testId]: next }));
+    await saveScreenshots(testId, next);
+  };
+
   const onClearScreenshot = async (testId, zone) => {
     const current = screenshotsMap[testId] ?? {};
     const next = { ...current };
@@ -170,6 +178,8 @@ export default function App() {
               onCreateClients={onCreateClients}
               onUpdateClient={onUpdateClient}
               onDeleteClient={onDeleteClient}
+              onSaveScreenshot={onSaveScreenshot}
+              onSaveScreenshots={onSaveScreenshots}
             />
           }
         />

@@ -16,7 +16,7 @@ function zoneForOverlay(overlay, test) {
   return zones.find(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) ?? null;
 }
 import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePdfFromSvg, generateHypothesis, generateFindings, toSlug } from "../lib/utils";
-import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
+import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
 export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
@@ -40,6 +40,9 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   const [editingOverlayId, setEditingOverlayId] = useState(null);
   const [editingNote, setEditingNote] = useState("");
   const [dragOverZone, setDragOverZone] = useState(null);
+  const [hoveredZone, setHoveredZone] = useState(null);
+  const zoneFileRef = useRef(null);
+  const [uploadTargetZone, setUploadTargetZone] = useState(null);
   const lastDropTime = useRef(0);
   const [findingsEditing, setFindingsEditing] = useState(false);
   const [findingsAiLoading, setFindingsAiLoading] = useState(false);
@@ -187,26 +190,37 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     setSvgPreviewOpen(true);
   };
 
+  const [pagePdfLoading, setPagePdfLoading] = useState(false);
+
+  const handleDownloadPagePDF = async () => {
+    setPagePdfLoading(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { jsPDF } = await import("jspdf");
+      const el = document.getElementById("test-details-content");
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#F4F6FA" });
+      const ptW = 595.28;
+      const ptH = (canvas.height / canvas.width) * ptW;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [ptW, ptH] });
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, ptW, ptH);
+      pdf.save(`${test.testName || "test"}.pdf`);
+    } catch (e) { console.error("Page PDF error:", e); }
+    finally { setPagePdfLoading(false); }
+  };
+
   const handleDownloadPDF = async () => {
     setPdfLoading(true);
     try {
+      const shots = screenshotsMap[test.id] || {};
+      const { zones } = computeSVGZones(test);
       await makePdfFromSvg(
-        generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant),
-        `${test.testName || "test-hypothesis"}.pdf`
+        generateSVG(test, shots, overlaysByVariant),
+        `${test.testName || "test-hypothesis"}.pdf`,
+        shots,
+        zones
       );
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("PDF error:", e); }
     finally { setPdfLoading(false); }
-  };
-
-  const handleDownloadSVG = () => {
-    const svg = generateSVG(test, screenshotsMap[test.id] || {}, overlaysByVariant);
-    const blob = new Blob([svg], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${test.testName || "test-hypothesis"}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -249,7 +263,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         } />;
       })()}
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px" : "36px 28px" }}>
+      <div id="test-details-content" style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px" : "36px 28px" }}>
         {/* Page title row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 16 }}>
           <div
@@ -287,10 +301,35 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
             const name = clients?.find(c => c.id === test.clientId)?.name;
             return name ? <span style={{ fontSize: 12, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 5, padding: "4px 10px" }}>{name}</span> : null;
           })()}
-          {test.testType && <span style={{ fontSize: 12, fontWeight: 600, color: ACCENT, background: "#F0F4FA", border: `1px solid #C0CFEA`, borderRadius: 5, padding: "4px 10px" }}>{test.testType}</span>}
-          {test.audience && <span style={{ fontSize: 12, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 5, padding: "4px 10px" }}>{test.audience}</span>}
-          {test.primaryMetric && <span style={{ fontSize: 12, fontWeight: 600, color: TEAL, background: "#F0FAFA", border: `1px solid #A8D8D8`, borderRadius: 5, padding: "4px 10px" }}>{test.primaryMetric}</span>}
+          {test.testType && <span style={{ fontSize: 12, fontWeight: 600, color: ACCENT, background: "#F0F4FA", border: `1px solid #C0CFEA`, borderRadius: 5, padding: "4px 10px" }}><span style={{ fontWeight: 500, opacity: 0.65, marginRight: 4 }}>Type</span>{test.testType}</span>}
+          {test.audience && <span style={{ fontSize: 12, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 5, padding: "4px 10px" }}><span style={{ fontWeight: 500, opacity: 0.65, marginRight: 4 }}>Audience</span>{test.audience}</span>}
+          {test.primaryMetric && <span style={{ fontSize: 12, fontWeight: 600, color: TEAL, background: "#F0FAFA", border: `1px solid #A8D8D8`, borderRadius: 5, padding: "4px 10px" }}><span style={{ fontWeight: 500, opacity: 0.65, marginRight: 4 }}>KPI</span>{test.primaryMetric}</span>}
           <span style={{ fontSize: 12, color: DIM, fontWeight: 500, padding: "4px 0" }}>Updated {fmtDate(test.updatedAt)}</span>
+        </div>
+
+        {/* Action row */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+          <button
+            onClick={openPreview}
+            style={{ background: TEAL, color: "#fff", border: "none", borderRadius: 7, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 7 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+              <circle cx="8" cy="8" r="2" stroke="white" strokeWidth="1.5"/>
+            </svg>
+            View Visualization
+          </button>
+          <button
+            onClick={handleDownloadPagePDF}
+            disabled={pagePdfLoading}
+            style={{ background: CARD, color: TEXT, border: `1.5px solid ${BORDER}`, borderRadius: 7, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: pagePdfLoading ? "wait" : "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 7, opacity: pagePdfLoading ? 0.7 : 1 }}
+          >
+            {pagePdfLoading ? (
+              <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(0,0,0,.2)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke={TEXT} strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
+            ) : (
+              <><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="8" height="10" rx="1" stroke={TEXT} strokeWidth="1.5"/><path d="M10 4h2a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-1" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round"/><path d="M5 9h4M5 7h4M5 11h2" stroke={TEXT} strokeWidth="1.2" strokeLinecap="round"/></svg>Download PDF</>
+            )}
+          </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr" : "1fr 340px", gap: 24 }}>
@@ -341,20 +380,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 </div>
                 <TestResults results={test.results ?? null} onImport={(parsed) => onUpdateTest(Number(id), "results", parsed)} onClear={() => onUpdateTest(Number(id), "results", null)} />
               </div>
-            )}
-
-            {/* View Template CTA — mobile only, shown above hypothesis */}
-            {isTablet && (
-              <button
-                onClick={openPreview}
-                style={{ width: "100%", marginBottom: 20, background: TEAL, color: "#fff", border: "none", borderRadius: 8, padding: "13px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <circle cx="8" cy="8" r="2" stroke="white" strokeWidth="1.5"/>
-                </svg>
-                View Template
-              </button>
             )}
 
             {/* Hypothesis */}
@@ -479,6 +504,29 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               ))}
             </div>
 
+            {/* Test Type */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>Test Type</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: test.testType ? ACCENT : DIM }}>{test.testType || <em style={{ fontWeight: 400 }}>Not set</em>}</div>
+            </div>
+
+            {/* Audience */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>Audience</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: "uppercase", marginBottom: 5 }}>Segment</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: test.audience ? TEXT : DIM }}>{test.audience || <em style={{ fontWeight: 400 }}>Not set</em>}</div>
+                </div>
+                {test.pageUrl && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: "uppercase", marginBottom: 5 }}>Page URL</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: TEAL, wordBreak: "break-all" }}>{test.pageUrl}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Metrics */}
             <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>Metrics</div>
@@ -505,31 +553,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
 
           {/* Right column */}
           <div>
-            {/* Actions */}
-            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 18, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Export</div>
-              <button className="act-btn" onClick={openPreview} style={{ background: TEAL, color: "#fff" }}>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-                  <circle cx="8" cy="8" r="2" stroke="white" strokeWidth="1.5"/>
-                </svg>
-                View Template
-              </button>
-              <button className="act-btn" onClick={handleDownloadPDF} disabled={pdfLoading} style={{ background: ACCENT, color: "#fff", opacity: pdfLoading ? 0.7 : 1, cursor: pdfLoading ? "wait" : "pointer" }}>
-                {pdfLoading ? (
-                  <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.3)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
-                ) : (
-                  <><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="8" height="10" rx="1" stroke="white" strokeWidth="1.5"/><path d="M10 4h2a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/><path d="M5 9h4M5 7h4M5 11h2" stroke="white" strokeWidth="1.2" strokeLinecap="round"/></svg>Download PDF</>
-                )}
-              </button>
-              <button className="act-btn" onClick={handleDownloadSVG} style={{ background: GOLD, color: "#fff" }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 1v8M5 6l3 3 3-3M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Download SVG
-              </button>
-            </div>
-
             {/* Client Notes */}
             {(() => {
               const clientNotes = activeOverlays.filter(o => o.isClientNote);
@@ -565,24 +588,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                 </div>
               );
             })()}
-
-            {/* Screenshots */}
-            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Screenshots</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {SCREENSHOT_ZONES.map(z => (
-                  <ScreenshotZone
-                    key={z.key}
-                    label={z.label}
-                    sub={z.sub}
-                    value={screenshots[z.key] || null}
-                    onSet={(dataUrl) => onSaveScreenshot(Number(id), z.key, dataUrl)}
-                    onClear={() => onClearScreenshot(Number(id), z.key)}
-                    light
-                  />
-                ))}
-              </div>
-            </div>
 
             {/* Overlays */}
             <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: 18, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
@@ -683,26 +688,14 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         <div style={{ position: "fixed", inset: 0, background: "#0D1520", zIndex: 1100, display: "flex", flexDirection: "column" }}>
           <div style={{ flexShrink: 0, background: "#1A2540", borderBottom: "1px solid #2E3F5C", padding: "10px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{test.testName || "Untitled Test"}</div>
-              <div style={{ fontSize: 11, color: "#8BA4C8", marginTop: 1 }}>SVG Template Preview</div>
-            </div>
-            <div style={{ display: "flex", background: "#0D1520", borderRadius: 6, padding: 3, gap: 2 }}>
-              {["fit", "actual"].map(z => (
-                <button key={z} onClick={() => setSvgPreviewZoom(z)}
-                  style={{ padding: "5px 12px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif", background: svgPreviewZoom === z ? TEAL : "transparent", color: svgPreviewZoom === z ? "#fff" : "#8BA4C8" }}>
-                  {z === "fit" ? "Fit" : "100%"}
-                </button>
-              ))}
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{test.testName || "Untitled Test"}</div>
+              <div style={{ fontSize: 11, color: "#8BA4C8", marginTop: 1 }}>Test Visualization</div>
             </div>
             <button onClick={handleDownloadPDF} disabled={pdfLoading}
               style={{ background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: pdfLoading ? "wait" : "pointer", fontFamily: "'Inter',sans-serif", opacity: pdfLoading ? 0.7 : 1, display: "flex", alignItems: "center", gap: 6 }}>
               {pdfLoading ? (
                 <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.3)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
               ) : <>⬇ Download PDF</>}
-            </button>
-            <button onClick={handleDownloadSVG}
-              style={{ background: GOLD, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-              ⬇ Download SVG
             </button>
             <button onClick={() => setSvgPreviewOpen(false)}
               style={{ background: "none", border: "1px solid #2E3F5C", color: "#8BA4C8", padding: "8px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
@@ -712,7 +705,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
           <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
             <div style={{ flex: 1, overflow: "auto", padding: isMobile ? "12px" : "20px", boxSizing: "border-box" }}>
               <div
-                style={{ position: "relative", display: "block", width: svgPreviewZoom === "fit" ? "100%" : "max-content" }}
+                style={{ position: "relative", display: "block", width: "100%" }}
                 onDragOver={e => e.preventDefault()}
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
                 onDrop={e => {
@@ -739,51 +732,104 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                   dangerouslySetInnerHTML={{ __html: svgForDisplay(svgPreviewZoom) }}
                   style={{ display: "block", lineHeight: 0, borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,.6)", overflow: "hidden" }}
                 />
-                {/* Screenshot drop zones */}
+                {/* Screenshot drop zones — drag/drop + click to upload + remove */}
+                <input
+                  ref={zoneFileRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (!file || !uploadTargetZone) return;
+                    const reader = new FileReader();
+                    reader.onload = ev => onSaveScreenshot(Number(id), uploadTargetZone, ev.target.result);
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                />
                 {test && (() => {
                   const { W, totalH, zones } = computeSVGZones(test);
-                  return zones.map(zone => (
-                    <div
-                      key={zone.key}
-                      onDragEnter={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOverZone(zone.key); } }}
-                      onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); setDragOverZone(zone.key); } }}
-                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
-                      onDrop={e => {
-                        if (!e.dataTransfer.types.includes("Files")) return;
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDragOverZone(null);
-                        const file = e.dataTransfer.files[0];
-                        if (!file || !file.type.startsWith("image/")) return;
-                        const reader = new FileReader();
-                        reader.onload = ev => onSaveScreenshot(Number(id), zone.key, ev.target.result);
-                        reader.readAsDataURL(file);
-                      }}
-                      style={{
-                        position: "absolute",
-                        left: `${(zone.x / W) * 100}%`,
-                        top: `${(zone.y / totalH) * 100}%`,
-                        width: `${(zone.w / W) * 100}%`,
-                        height: `${(zone.h / totalH) * 100}%`,
-                        borderRadius: 6,
-                        boxSizing: "border-box",
-                        background: dragOverZone === zone.key ? "rgba(42,140,140,0.25)" : "transparent",
-                        border: dragOverZone === zone.key ? "2px dashed #2A8C8C" : "2px solid transparent",
-                        transition: "background 0.15s, border-color 0.15s",
-                        zIndex: 5,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        pointerEvents: "all",
-                      }}
-                    >
-                      {dragOverZone === zone.key && (
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#2A8C8C", background: "rgba(13,21,32,0.85)", padding: "8px 16px", borderRadius: 6, pointerEvents: "none", fontFamily: "'Inter',sans-serif" }}>
-                          Drop to set {zone.label}
-                        </div>
-                      )}
-                    </div>
-                  ));
+                  return zones.map(zone => {
+                    const hasShot = !!screenshots[zone.key];
+                    const isDragOver = dragOverZone === zone.key;
+                    const isHovered = hoveredZone === zone.key;
+                    return (
+                      <div
+                        key={zone.key}
+                        onMouseEnter={() => setHoveredZone(zone.key)}
+                        onMouseLeave={() => setHoveredZone(null)}
+                        onDragEnter={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOverZone(zone.key); } }}
+                        onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.stopPropagation(); setDragOverZone(zone.key); } }}
+                        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverZone(null); }}
+                        onDrop={e => {
+                          if (!e.dataTransfer.types.includes("Files")) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragOverZone(null);
+                          const file = e.dataTransfer.files[0];
+                          if (!file || !file.type.startsWith("image/")) return;
+                          const reader = new FileReader();
+                          reader.onload = ev => onSaveScreenshot(Number(id), zone.key, ev.target.result);
+                          reader.readAsDataURL(file);
+                        }}
+                        style={{
+                          position: "absolute",
+                          left: `${(zone.x / W) * 100}%`,
+                          top: `${(zone.y / totalH) * 100}%`,
+                          width: `${(zone.w / W) * 100}%`,
+                          height: `${(zone.h / totalH) * 100}%`,
+                          borderRadius: 6,
+                          boxSizing: "border-box",
+                          background: isDragOver ? "rgba(42,140,140,0.25)" : "transparent",
+                          border: isDragOver ? "2px dashed #2A8C8C" : "2px solid transparent",
+                          transition: "background 0.15s, border-color 0.15s",
+                          zIndex: 5,
+                          pointerEvents: "all",
+                        }}
+                      >
+                        {/* Drag-over label */}
+                        {isDragOver && (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#2A8C8C", background: "rgba(13,21,32,0.85)", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif" }}>
+                              Drop to set {zone.label}
+                            </div>
+                          </div>
+                        )}
+                        {/* Hover controls */}
+                        {!isDragOver && isHovered && (
+                          hasShot ? (
+                            /* Remove button — top-right corner */
+                            <button
+                              onClick={e => { e.stopPropagation(); onClearScreenshot(Number(id), zone.key); }}
+                              title="Remove screenshot"
+                              style={{
+                                position: "absolute", top: 6, right: 6,
+                                width: 26, height: 26, borderRadius: 5,
+                                background: "rgba(0,0,0,.72)", border: "none",
+                                color: "#fff", fontSize: 15, lineHeight: "26px",
+                                textAlign: "center", cursor: "pointer", padding: 0,
+                              }}
+                            >×</button>
+                          ) : (
+                            /* Upload button — centred */
+                            <button
+                              onClick={e => { e.stopPropagation(); setUploadTargetZone(zone.key); zoneFileRef.current?.click(); }}
+                              title="Upload screenshot"
+                              style={{
+                                position: "absolute", inset: 0, width: "100%", height: "100%",
+                                background: "rgba(13,21,32,0.45)", border: "none",
+                                cursor: "pointer", display: "flex", flexDirection: "column",
+                                alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 6,
+                              }}
+                            >
+                              <span style={{ fontSize: 22, opacity: 0.9 }}>↑</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", fontFamily: "'Inter',sans-serif" }}>Upload screenshot</span>
+                            </button>
+                          )
+                        )}
+                      </div>
+                    );
+                  });
                 })()}
                 {activeOverlays.map(p => (
                   <Fragment key={p.id}>
@@ -929,7 +975,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
 
               {/* Client Notes */}
               <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #1E2F48" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Client Notes — Variant {activeVariant}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Client Notes</div>
                 <div style={{ fontSize: 10, color: "#3A5070", lineHeight: 1.6, marginBottom: 10 }}>Drag onto the template to pin a note. Click a marker to edit.</div>
                 <div
                   draggable
@@ -954,55 +1000,6 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                     style={{ width: "100%", marginTop: 2, background: "none", border: "1px solid #2E3F5C", color: "#5A7AAA", padding: "5px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
                   >Clear notes ({activeOverlays.filter(o => o.isClientNote).length})</button>
                 )}
-              </div>
-
-              {/* Control screenshots */}
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Screenshots — Control</div>
-              <ScreenshotZone
-                label="Control"
-                sub="Desktop"
-                value={screenshots.controlDesktop || null}
-                onSet={(dataUrl) => onSaveScreenshot(Number(id), "controlDesktop", dataUrl)}
-                onClear={() => onClearScreenshot(Number(id), "controlDesktop")}
-              />
-              <div style={{ marginTop: 8 }}>
-                <ScreenshotZone
-                  label="Control"
-                  sub="Mobile"
-                  value={screenshots.controlMobile || null}
-                  onSet={(dataUrl) => onSaveScreenshot(Number(id), "controlMobile", dataUrl)}
-                  onClear={() => onClearScreenshot(Number(id), "controlMobile")}
-                />
-              </div>
-
-              {/* Screenshots for active variant */}
-              <div style={{ marginTop: 16, borderTop: "1px solid #1E2F48", paddingTop: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#5A7AAA", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>
-                  Screenshots — Variant {activeVariant}
-                </div>
-                {(() => {
-                  const keys = variantScreenshotKeys(activeVariant);
-                  return (
-                    <>
-                      <ScreenshotZone
-                        label={`Variant ${activeVariant}`}
-                        sub="Desktop"
-                        value={screenshots[keys.desktop] || null}
-                        onSet={(dataUrl) => onSaveScreenshot(Number(id), keys.desktop, dataUrl)}
-                        onClear={() => onClearScreenshot(Number(id), keys.desktop)}
-                      />
-                      <div style={{ marginTop: 8 }}>
-                        <ScreenshotZone
-                          label={`Variant ${activeVariant}`}
-                          sub="Mobile"
-                          value={screenshots[keys.mobile] || null}
-                          onSet={(dataUrl) => onSaveScreenshot(Number(id), keys.mobile, dataUrl)}
-                          onClear={() => onClearScreenshot(Number(id), keys.mobile)}
-                        />
-                      </div>
-                    </>
-                  );
-                })()}
               </div>
 
               {/* Overlay Items */}

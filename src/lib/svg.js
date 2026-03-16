@@ -57,10 +57,10 @@ function truncateUrl(url, max = 48) {
 
 function screenshotOrZone(dataUrl, x, y, w, h, label, sub) {
   if (!dataUrl) return ssZone(x, y, w, h, label, sub);
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#F0F4FA" stroke="#C0CFEA" stroke-width="1.5"/>
-<svg x="${x}" y="${y}" width="${w}" height="${h}" overflow="hidden">
-  <image href="${dataUrl}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="xMinYMin slice"/>
-</svg>`;
+  const clipId = `ss_${x}_${y}`;
+  return `<defs><clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath></defs>
+<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="#F0F4FA" stroke="#C0CFEA" stroke-width="1.5"/>
+<image href="${dataUrl}" x="${x}" y="${y}" width="${w}" height="${h}" clip-path="url(#${clipId})" preserveAspectRatio="xMinYMin slice"/>`;
 }
 
 export function computeSVGZones(t) {
@@ -104,6 +104,9 @@ export function generateSVG(t, screenshots = {}, overlaysByVariant = {}) {
   const W = 1200;
   const HYP_WRAP = 56;
   const LEAD = 18;
+
+  const nameLines = wrap(t.testName || "—", 38);
+  const nameShift = Math.max(0, nameLines.length - 1) * 16;
 
   const ifLines   = wrap(t.if      || "—", HYP_WRAP);
   const thenLines = wrap(t.then    || "—", HYP_WRAP);
@@ -183,31 +186,31 @@ export function generateSVG(t, screenshots = {}, overlaysByVariant = {}) {
   <line x1="${c1tx}" y1="${c1y+28}" x2="${c1x+c1w-12}" y2="${c1y+28}" stroke="#DDE3ED" stroke-width="1"/>
 
   <text x="${c1tx}" y="${c1y+48}" font-size="10" fill="#888">Test Name</text>
-  <text x="${c1tx}" y="${c1y+65}" font-size="13" fill="#0F1923" font-weight="600">${escXml(t.testName || "—")}</text>
+  <text x="${c1tx}" y="${c1y+65}" font-size="13" fill="#0F1923" font-weight="600">${nameLines.map((line, i) => i === 0 ? `<tspan x="${c1tx}" dy="0">${escXml(line)}</tspan>` : `<tspan x="${c1tx}" dy="16">${escXml(line)}</tspan>`).join("")}</text>
 
-  <text x="${c1tx}" y="${c1y+90}" font-size="10" fill="#888">Page / URL</text>
+  <text x="${c1tx}" y="${c1y+90+nameShift}" font-size="10" fill="#888">Page / URL</text>
   ${(() => {
     const url = t.pageUrl || "";
     const isLink = /^https?:\/\//i.test(url);
     const display = escXml(truncateUrl(url, 38) || "—");
-    const textEl = `<text x="${c1tx}" y="${c1y+107}" font-size="11" fill="${url ? "#1B3A6B" : "#888"}" font-weight="500"${isLink ? ' text-decoration="underline"' : ""}>${display}</text>`;
+    const textEl = `<text x="${c1tx}" y="${c1y+107+nameShift}" font-size="11" fill="${url ? "#1B3A6B" : "#888"}" font-weight="500"${isLink ? ' text-decoration="underline"' : ""}>${display}</text>`;
     return isLink ? `<a href="${escXml(url)}" target="_blank">${textEl}</a>` : textEl;
   })()}
 
-  <text x="${c1tx}" y="${c1y+132}" font-size="10" fill="#888">Audience</text>
-  <text x="${c1tx}" y="${c1y+149}" font-size="13" fill="#0F1923" font-weight="500">${escXml(t.audience || "—")}</text>
+  <text x="${c1tx}" y="${c1y+132+nameShift}" font-size="10" fill="#888">Audience</text>
+  <text x="${c1tx}" y="${c1y+149+nameShift}" font-size="13" fill="#0F1923" font-weight="500">${escXml(t.audience || "—")}</text>
 
-  <text x="${c1tx}" y="${c1y+174}" font-size="10" fill="#888">Test Type</text>
-  <text x="${c1tx}" y="${c1y+191}" font-size="13" fill="#0F1923" font-weight="500">${escXml(t.testType || "—")}</text>
+  <text x="${c1tx}" y="${c1y+174+nameShift}" font-size="10" fill="#888">Test Type</text>
+  <text x="${c1tx}" y="${c1y+191+nameShift}" font-size="13" fill="#0F1923" font-weight="500">${escXml(t.testType || "—")}</text>
 
-  <text x="${c1tx}" y="${c1y+216}" font-size="10" fill="#888">PIE Score</text>
-  ${pill(c1tx, c1y+223, 58, 26, 4, scoreBg(score), scoreBorder(score), pieScore(t), scoreColor(score), 14)}
-  <text x="${c1tx+70}" y="${c1y+240}" font-size="11" fill="#C9A84C" font-weight="700">P ${t.potential}</text>
-  <text x="${c1tx+104}" y="${c1y+240}" font-size="11" fill="#1B3A6B" font-weight="700">I ${t.importance}</text>
-  <text x="${c1tx+138}" y="${c1y+240}" font-size="11" fill="#2A8C8C" font-weight="700">E ${t.ease}</text>
+  <text x="${c1tx}" y="${c1y+216+nameShift}" font-size="10" fill="#888">PIE Score</text>
+  ${pill(c1tx, c1y+223+nameShift, 58, 26, 4, scoreBg(score), scoreBorder(score), pieScore(t), scoreColor(score), 14)}
+  <text x="${c1tx+70}" y="${c1y+240+nameShift}" font-size="11" fill="#C9A84C" font-weight="700">P ${t.potential}</text>
+  <text x="${c1tx+104}" y="${c1y+240+nameShift}" font-size="11" fill="#1B3A6B" font-weight="700">I ${t.importance}</text>
+  <text x="${c1tx+138}" y="${c1y+240+nameShift}" font-size="11" fill="#2A8C8C" font-weight="700">E ${t.ease}</text>
 
-  <text x="${c1tx}" y="${c1y+268}" font-size="10" fill="#888">Date</text>
-  <text x="${c1tx}" y="${c1y+285}" font-size="13" fill="#0F1923" font-weight="500">${today}</text>
+  <text x="${c1tx}" y="${c1y+268+nameShift}" font-size="10" fill="#888">Date</text>
+  <text x="${c1tx}" y="${c1y+285+nameShift}" font-size="13" fill="#0F1923" font-weight="500">${today}</text>
 
   <!-- C2: Hypothesis -->
   <rect x="${c2x}" y="${c2y}" width="${c2w}" height="${c2h}" rx="6" fill="#F7F8FA" stroke="#DDE3ED" stroke-width="1"/>

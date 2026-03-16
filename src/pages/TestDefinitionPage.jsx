@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import AppHeader from "../components/AppHeader";
 import ScreenshotZone from "../components/ScreenshotZone";
-import { generateSVG } from "../lib/svg";
+import { generateSVG, computeSVGZones } from "../lib/svg";
 import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, makePdfFromSvg, parseCSV, mapCSVToTest, generateHypothesis } from "../lib/utils";
 import { TEST_TYPES, TEST_STATUSES, DEFAULT_STATUS, METRICS, AUDIENCES, PIE_CRITERIA, SCREENSHOT_ZONES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
@@ -117,8 +117,12 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
 
   const downloadPDF = async () => {
     setPdfLoading(true);
-    try { await makePdfFromSvg(generateSVG(test, screenshotsMap[testId] || {}), `${test.testName || "test-hypothesis"}.pdf`); }
-    catch (e) { console.error(e); }
+    try {
+      const shots = screenshotsMap[testId] || {};
+      const { zones } = computeSVGZones(test);
+      await makePdfFromSvg(generateSVG(test, shots), `${test.testName || "test-hypothesis"}.pdf`, shots, zones);
+    }
+    catch (e) { console.error("PDF error:", e); }
     finally { setPdfLoading(false); }
   };
 

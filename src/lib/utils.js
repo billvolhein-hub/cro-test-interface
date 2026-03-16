@@ -130,41 +130,61 @@ export function mapCSVToTest(row) {
   return result;
 }
 
+// Rounded-rect clip path (polyfill for ctx.roundRect)
+function clipRounded(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y,     x + w, y + r,     r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x,     y + h, x,     y + h - r, r);
+  ctx.lineTo(x,     y + r);
+  ctx.arcTo(x,     y,     x + r, y,         r);
+  ctx.closePath();
+}
+
+// screenshots: { controlDesktop, controlMobile, variantDesktop, … } — public URLs
+// zones: array of { key, x, y, w, h } from computeSVGZones
 export const makePdfFromSvg = async (svgString, filename) => {
-  const blob = new Blob([svgString], { type: "image/svg+xml" });
-  const url  = URL.createObjectURL(blob);
+  // Remove the Inter font reference — it's served from Google Fonts (cross-origin)
+  // and causes canvas taint even via canvg.
+  const cleanSvg = svgString.replace(/Inter,\s*/g, "");
 
-  await new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const W = img.naturalWidth  || 1200;
-      const H = img.naturalHeight || 800;
-      const canvas = document.createElement("canvas");
-      canvas.width  = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, W, H);
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
+  const { Canvg, presets } = await import("canvg");
 
-      const ptW = W * 0.75;
-      const ptH = H * 0.75;
+  const parser = new DOMParser();
+  const svgDoc = parser.parseFromString(cleanSvg, "image/svg+xml");
+  const W = parseInt(svgDoc.documentElement.getAttribute("width")  || "1200", 10);
+  const H = parseInt(svgDoc.documentElement.getAttribute("height") || "800",  10);
 
-      import("jspdf").then(({ jsPDF }) => {
-        const pdf = new jsPDF({
-          orientation: ptW > ptH ? "landscape" : "portrait",
-          unit: "pt",
-          format: [ptW, ptH],
-        });
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.93), "JPEG", 0, 0, ptW, ptH);
-        pdf.save(filename);
-        resolve();
-      }).catch(reject);
-    };
-    img.onerror = reject;
-    img.src = url;
+  const canvas = document.createElement("canvas");
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, H);
+
+  // canvg renders SVG entirely via Canvas 2D — no browser image-loading taint.
+  // It loads <image> elements (Supabase URLs) with CORS, preserving overlay z-order.
+  const cv = Canvg.fromString(ctx, cleanSvg, {
+    ...presets.offscreen(),
+    ignoreMouse: true,
+    ignoreAnimation: true,
   });
+  await cv.render();
+
+  const ptW = W * 0.75;
+  const ptH = H * 0.75;
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({
+    orientation: ptW > ptH ? "landscape" : "portrait",
+    unit: "pt",
+    format: [ptW, ptH],
+  });
+  pdf.addImage(canvas.toDataURL("image/jpeg", 0.93), "JPEG", 0, 0, ptW, ptH);
+  pdf.save(filename);
 };
 
 // ── AI hypothesis generation ────────────────────────────────────────────────
