@@ -1,30 +1,55 @@
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 
-// Dynamically load the Google Identity Services script
-function loadGIS() {
-  return new Promise((resolve) => {
-    if (window.google?.accounts?.oauth2) { resolve(); return; }
-    const s = document.createElement("script");
-    s.src = "https://accounts.google.com/gsi/client";
-    s.onload = resolve;
-    document.head.appendChild(s);
-  });
-}
+// OAuth 2.0 implicit flow via popup — no GIS library needed.
+// redirect_uri must be added to the OAuth client's Authorized Redirect URIs in Google Cloud Console.
+export function getGSCToken() {
+  const redirectUri = `${window.location.origin}/auth/callback`;
 
-// Request an OAuth access token via the GIS token model (no redirect, popup flow)
-export async function getGSCToken() {
-  await loadGIS();
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: "token",
+    scope: SCOPE,
+    prompt: "select_account",
+  });
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+
   return new Promise((resolve, reject) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPE,
-      callback: (response) => {
-        if (response.error) reject(new Error(response.error_description || response.error));
-        else resolve(response.access_token);
-      },
-    });
-    client.requestAccessToken({ prompt: "select_account" });
+    const popup = window.open(authUrl, "gsc-oauth", "width=520,height=660,left=200,top=100");
+    if (!popup) {
+      reject(new Error("Popup blocked — please allow popups for this site."));
+      return;
+    }
+
+    const interval = setInterval(() => {
+      try {
+        if (popup.closed) {
+          clearInterval(interval);
+          reject(new Error("Authentication cancelled."));
+          return;
+        }
+        // Once the popup lands back on our origin we can read the hash
+        if (popup.location.pathname === "/auth/callback") {
+          const hash = popup.location.hash;
+          clearInterval(interval);
+          popup.close();
+          const p = new URLSearchParams(hash.substring(1));
+          const token = p.get("access_token");
+          if (token) resolve(token);
+          else reject(new Error(p.get("error_description") || p.get("error") || "No token received."));
+        }
+      } catch {
+        // Cross-origin error while popup is on Google's domain — expected, keep polling
+      }
+    }, 200);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      if (!popup.closed) popup.close();
+      reject(new Error("Authentication timed out."));
+    }, 5 * 60 * 1000);
   });
 }
 
