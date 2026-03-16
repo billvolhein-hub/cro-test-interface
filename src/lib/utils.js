@@ -217,11 +217,12 @@ Rules:
 - Be specific and concise — each field should be 1–2 sentences
 - Use present tense`;
 
-  const res = await fetch("/api/anthropic/v1/messages", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -282,11 +283,12 @@ Rules:
 - Do not use the word "significant" unless confidence is ≥95%
 - Return ONLY the HTML, no markdown fences, no commentary`;
 
-  const res = await fetch("/api/anthropic/v1/messages", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
       "content-type": "application/json",
     },
     body: JSON.stringify({
