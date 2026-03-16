@@ -152,11 +152,21 @@ export default function IdeationModal({
 
   const handleClose = () => { reset(); onClose(); };
 
-  const readFileText = (file) => new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => resolve(ev.target.result);
-    reader.readAsText(file);
-  });
+  const readFileText = async (file) => {
+    // If it's a zip, extract the first CSV inside
+    if (file.name.endsWith(".zip") || file.type === "application/zip") {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const csvFile = Object.values(zip.files).find(f => f.name.endsWith(".csv") && !f.dir);
+      if (!csvFile) throw new Error(`No CSV found inside ${file.name}`);
+      return csvFile.async("string");
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve(ev.target.result);
+      reader.readAsText(file);
+    });
+  };
 
   const isValidUrl = (s) => { try { return /^https?:\/\/.+/.test(s) && Boolean(new URL(s)); } catch { return false; } };
 
@@ -168,14 +178,20 @@ export default function IdeationModal({
     setError("");
 
     try {
-      // 1. Screenshot the URL via Puppeteer
-      const ssRes = await fetch(`/api/screenshot?url=${encodeURIComponent(pageUrl)}`);
-      const ssData = await ssRes.json();
-      if (!ssRes.ok || ssData.error) throw new Error(`Screenshot failed: ${ssData.error}`);
-      const dataUrl = ssData.dataUrl;
-      const [header, base64] = dataUrl.split(",");
-      const mediaType = header.replace("data:", "").replace(";base64", "");
-      capturedScreenshot.current = { dataUrl, base64, mediaType };
+      // 1. Screenshot the URL via Puppeteer (optional — only available in local dev)
+      let screenshot = null;
+      try {
+        const ssRes = await fetch(`/api/screenshot?url=${encodeURIComponent(pageUrl)}`);
+        if (ssRes.ok) {
+          const ssData = await ssRes.json();
+          if (ssData.dataUrl) {
+            const [header, base64] = ssData.dataUrl.split(",");
+            const mediaType = header.replace("data:", "").replace(";base64", "");
+            screenshot = { dataUrl: ssData.dataUrl, base64, mediaType };
+            capturedScreenshot.current = screenshot;
+          }
+        }
+      } catch { /* screenshot unavailable — proceed without it */ }
 
       // 2. Read CSVs
       const [gaText, gscText] = await Promise.all([
@@ -188,10 +204,10 @@ export default function IdeationModal({
       const gscTextTruncated = truncate(gscText, 200);
 
       const userContent = [
-        {
+        ...(screenshot ? [{
           type: "image",
-          source: { type: "base64", media_type: mediaType, data: base64 },
-        },
+          source: { type: "base64", media_type: screenshot.mediaType, data: screenshot.base64 },
+        }] : []),
         {
           type: "text",
           text: [
@@ -203,7 +219,9 @@ export default function IdeationModal({
             "=== GOOGLE SEARCH CONSOLE (90-day) ===",
             gscTextTruncated,
             "",
-            "Analyze the screenshot and data above. Return exactly 3 CRO test recommendations as JSON.",
+            screenshot
+              ? "Analyze the screenshot and data above. Return exactly 3 CRO test recommendations as JSON."
+              : "Analyze the data above (no screenshot available). Return exactly 3 CRO test recommendations as JSON.",
           ].join("\n"),
         },
       ];
@@ -432,7 +450,7 @@ export default function IdeationModal({
                 <FileDropZone
                   label="Google Analytics CSV"
                   hint="90-day export from GA4 or UA"
-                  accept=".csv,text/csv"
+                  accept=".csv,.zip,text/csv,application/zip"
                   file={gaFile}
                   onFile={setGaFile}
                   icon="📊"
@@ -441,7 +459,7 @@ export default function IdeationModal({
                 <FileDropZone
                   label="Search Console CSV"
                   hint="90-day performance export from GSC"
-                  accept=".csv,text/csv"
+                  accept=".csv,.zip,text/csv,application/zip"
                   file={gscFile}
                   onFile={setGscFile}
                   icon="🔍"
