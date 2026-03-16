@@ -348,7 +348,7 @@ function parseConvertReport(reportData, goalNames, variationsData, experienceId)
 
   const goals = reportData.map(goalEntry => {
     const goalId   = goalEntry.goal_id;
-    const goalName = goalNames[goalId] ?? `Goal ${goalId}`;
+    const goalName = goalNames[String(goalId)] ?? `Goal ${goalId}`;
 
     const rows = goalEntry.variations.map(v => {
       const cd = v.conversion_data;
@@ -389,19 +389,39 @@ export async function fetchConvertResults(experienceId) {
   const base = `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}`;
   const proxyBase = `/api/convert/api/v2/accounts/${accountId}/projects/${projectId}`;
 
-  // ── 1. Fetch goal names ───────────────────────────────────────────────────
-  const goalsTarget = `${base}/goals`;
-  const goalsHeaders = await convertHeaders(appId, appSecret, goalsTarget, null);
-  const goalsRes = await fetch(`${proxyBase}/goals`, { headers: goalsHeaders });
+  // ── 1. Fetch goal names from the experience (most reliable) + project goals fallback ──
   let goalNames = {};
-  if (goalsRes.ok) {
-    const gd = await goalsRes.json();
-    const list = gd?.data ?? gd ?? [];
-    if (Array.isArray(list)) {
-      goalNames = Object.fromEntries(list.map(g => [g.id, g.name]));
+
+  // Primary: fetch experience details which includes its configured goals
+  try {
+    const expTarget = `${base}/experiences/${experienceId}`;
+    const expHeaders = await convertHeaders(appId, appSecret, expTarget, null);
+    const expRes = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
+    if (expRes.ok) {
+      const ed = await expRes.json();
+      const expData = ed?.data ?? ed;
+      const goals = expData?.goals ?? expData?.data?.goals ?? [];
+      if (Array.isArray(goals) && goals.length) {
+        goalNames = Object.fromEntries(goals.map(g => [String(g.id), g.name ?? g.label ?? `Goal ${g.id}`]));
+      }
     }
-  }
-  // If goals fetch fails we'll fall back to IDs — non-fatal
+  } catch { /* non-fatal */ }
+
+  // Fallback: project-level goals list (catches any goals not on the experience object)
+  try {
+    const goalsTarget = `${base}/goals`;
+    const goalsHeaders = await convertHeaders(appId, appSecret, goalsTarget, null);
+    const goalsRes = await fetch(`${proxyBase}/goals`, { headers: goalsHeaders });
+    if (goalsRes.ok) {
+      const gd = await goalsRes.json();
+      const list = gd?.data ?? gd ?? [];
+      if (Array.isArray(list)) {
+        for (const g of list) {
+          if (!goalNames[String(g.id)]) goalNames[String(g.id)] = g.name ?? g.label ?? `Goal ${g.id}`;
+        }
+      }
+    }
+  } catch { /* non-fatal */ }
 
   // ── 2. Fetch aggregated report ────────────────────────────────────────────
   const reportTarget = `${base}/experiences/${experienceId}/aggregated_report`;
