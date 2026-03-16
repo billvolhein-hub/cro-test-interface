@@ -101,52 +101,78 @@ function confidenceLabel(conf) {
 const VARIANT_PALETTE = ["#1B3A6B", "#2A8C8C", "#C9A84C", "#6D28D9", "#E74C3C"];
 
 function GoalCard({ goal, variantOrder }) {
-  const control = goal.rows.find(r => r.variant === variantOrder[0]);
+  const control  = goal.rows.find(r => r.variant === variantOrder[0]);
   const variants = goal.rows.filter(r => r.variant !== variantOrder[0]);
-  const allRates = goal.rows.map(r => r.rate);
-  const maxRate = Math.max(...allRates, 1);
+  // Normalise delta bars to the largest absolute change (min 1 so we never divide by 0)
+  const maxDelta = Math.max(...variants.map(r => Math.abs(r.change)), 1);
 
   return (
     <div style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 14 }}>{goal.name}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 12 }}>{goal.name}</div>
 
-      {/* Bars */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {goal.rows.map((row, i) => {
-          const isControl = row.variant === variantOrder[0];
-          const barColor = VARIANT_PALETTE[i] ?? "#888";
-          const barPct = (row.rate / maxRate) * 100;
-          const conf = isControl ? null : row.confidence;
-          const ch = isControl ? null : row.change;
+      {/* Control baseline */}
+      {control && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 6, padding: "8px 12px", marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: VARIANT_PALETTE[0], flexShrink: 0 }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: TEXT }}>{control.variant}</span>
+            <span style={{ fontSize: 9, fontWeight: 600, color: MUTED, background: "#E5E7EB", border: "1px solid #D1D5DB", borderRadius: 4, padding: "1px 5px" }}>Baseline</span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{control.rate.toFixed(2)}%</div>
+            <div style={{ fontSize: 10, color: MUTED }}>{control.conversions.toLocaleString()} / {control.visitors.toLocaleString()} visitors</div>
+          </div>
+        </div>
+      )}
+
+      {/* Variant lift rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {variants.map((row, i) => {
+          const barColor  = VARIANT_PALETTE[i + 1] ?? "#888";
+          const isPos     = row.change >= 0;
+          const liftColor = isPos ? "#16A34A" : "#DC2626";
+          const liftBg    = isPos ? "#F0FDF4" : "#FEF2F2";
+          // Bar fills from centre; max half-width = 46% (leaves 4% margin each side)
+          const barHalf   = Math.min((Math.abs(row.change) / maxDelta) * 46, 46);
 
           return (
-            <div key={row.variant}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div key={row.variant} style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "10px 12px", background: "#fff" }}>
+              {/* Row header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: barColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontWeight: 600, color: TEXT }}>{row.variant}</span>
-                  {!isControl && conf !== null && (
-                    <span style={{ fontSize: 9, fontWeight: 700, color: confidenceColor(conf), background: confidenceBg(conf), border: `1px solid ${confidenceBorder(conf)}`, borderRadius: 4, padding: "1px 5px", letterSpacing: 0.5 }}>
-                      {confidenceLabel(conf)} · {conf.toFixed(0)}%
+                  {row.confidence !== null && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: confidenceColor(row.confidence), background: confidenceBg(row.confidence), border: `1px solid ${confidenceBorder(row.confidence)}`, borderRadius: 4, padding: "1px 5px" }}>
+                      {confidenceLabel(row.confidence)} · {row.confidence.toFixed(0)}%
                     </span>
                   )}
-                  {isControl && (
-                    <span style={{ fontSize: 9, fontWeight: 600, color: MUTED, background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 4, padding: "1px 5px" }}>Control</span>
-                  )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {!isControl && ch !== null && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: ch >= 0 ? "#15803D" : "#DC2626" }}>
-                      {ch >= 0 ? "▲" : "▼"} {Math.abs(ch).toFixed(2)}%
-                    </span>
-                  )}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{row.rate.toFixed(2)}%</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  {/* Lift badge */}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: liftColor, background: liftBg, borderRadius: 5, padding: "2px 7px" }}>
+                    {isPos ? "▲" : "▼"} {Math.abs(row.change).toFixed(2)}%
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: MUTED }}>{row.rate.toFixed(2)}%</span>
                 </div>
               </div>
-              <div style={{ height: 10, background: "#E5E7EB", borderRadius: 5, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${barPct}%`, background: barColor, borderRadius: 5, transition: "width .4s ease" }} />
+
+              {/* Centred lift bar */}
+              <div style={{ position: "relative", height: 8, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+                {/* Baseline tick */}
+                <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 2, background: "#D1D5DB", transform: "translateX(-50%)", zIndex: 1 }} />
+                {/* Delta fill */}
+                <div style={{
+                  position: "absolute", top: 0, height: "100%",
+                  background: liftColor, borderRadius: 4, opacity: 0.85,
+                  transition: "width .4s ease, left .4s ease",
+                  ...(isPos
+                    ? { left: "50%", width: `${barHalf}%` }
+                    : { left: `${50 - barHalf}%`, width: `${barHalf}%` }),
+                }} />
               </div>
-              <div style={{ fontSize: 10, color: MUTED, marginTop: 3 }}>
+
+              <div style={{ fontSize: 10, color: MUTED, marginTop: 4 }}>
                 {row.conversions.toLocaleString()} / {row.visitors.toLocaleString()} visitors
               </div>
             </div>
