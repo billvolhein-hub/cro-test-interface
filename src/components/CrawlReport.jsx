@@ -409,7 +409,7 @@ export default function CrawlReport({ crawlReport, onSave }) {
   const [saving,    setSaving]    = useState(false);
   const [errorC,    setErrorC]    = useState("");
   const [errorI,    setErrorI]    = useState("");
-  const [open,      setOpen]      = useState(!!(crawlReport?.internal || crawlReport?.issues));
+  const [open,      setOpen]      = useState(false);
 
   const persist = async (patch) => {
     if (!onSave) return;

@@ -406,6 +406,13 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           </div>
         )}
 
+        {/* ── Crawl Report ── */}
+        <CrawlReport
+          clientId={clientId}
+          crawlReport={client.crawlReport}
+          onSave={(report) => onSaveCrawlReport?.(clientId, report)}
+        />
+
         {/* ── Pipeline overview ── */}
         <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "18px 22px", marginBottom: 28, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Test Pipeline</div>
@@ -423,13 +430,6 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
             ))}
           </div>
         </div>
-
-        {/* ── Crawl Report ── */}
-        <CrawlReport
-          clientId={clientId}
-          crawlReport={client.crawlReport}
-          onSave={(report) => onSaveCrawlReport?.(clientId, report)}
-        />
 
         {/* ── Tests grouped by stage ── */}
         {/* Client Notes feed */}

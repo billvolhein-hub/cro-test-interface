@@ -335,11 +335,11 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr" : "1fr 340px", gap: 24 }}>
           {/* Left column */}
           <div>
-            {/* Findings — top of column when Test Complete */}
-            {(test.status === "Test Complete") && (
-              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+            {/* Findings — top of column when Test Running or Test Complete */}
+            {(test.status === "Test Complete" || test.status === "Test Running") && (
+              <div style={{ background: CARD, border: `1.5px solid ${test.status === "Test Running" ? "#A5F3FC" : "#BBF7D0"}`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Findings</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: test.status === "Test Running" ? "#0E7490" : "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Findings</div>
                   {test.results && !findingsEditing && (
                     <button
                       onClick={handleAiFindings}
@@ -351,9 +351,12 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
                     </button>
                   )}
                   {!isPortal && (findingsEditing ? (
-                    <button onClick={() => setFindingsEditing(false)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Done</button>
+                    <>
+                      <button onClick={() => { onUpdateTest(Number(id), "findings", ""); setFindingsEditing(false); }} style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Clear</button>
+                      <button onClick={() => setFindingsEditing(false)} style={{ fontSize: 11, fontWeight: 700, color: test.status === "Test Running" ? "#0E7490" : "#15803D", background: test.status === "Test Running" ? "#ECFEFF" : "#F0FDF4", border: `1px solid ${test.status === "Test Running" ? "#A5F3FC" : "#BBF7D0"}`, borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Done</button>
+                    </>
                   ) : (
-                    <button onClick={() => setFindingsEditing(true)} style={{ fontSize: 11, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>✎ Edit</button>
+                    <button onClick={() => setFindingsEditing(true)} style={{ fontSize: 11, fontWeight: 700, color: test.status === "Test Running" ? "#0E7490" : "#15803D", background: test.status === "Test Running" ? "#ECFEFF" : "#F0FDF4", border: `1px solid ${test.status === "Test Running" ? "#A5F3FC" : "#BBF7D0"}`, borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>✎ Edit</button>
                   ))}
                 </div>
                 {findingsAiError && (
@@ -367,13 +370,13 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               </div>
             )}
 
-            {/* Results — top of column when Test Complete */}
-            {(test.status === "Test Complete") && (
-              <div style={{ background: CARD, border: `1.5px solid #BBF7D0`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+            {/* Results — top of column when Test Running or Test Complete */}
+            {(test.status === "Test Complete" || test.status === "Test Running") && (
+              <div style={{ background: CARD, border: `1.5px solid ${test.status === "Test Running" ? "#A5F3FC" : "#BBF7D0"}`, borderRadius: 10, padding: 24, marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Results</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: test.status === "Test Running" ? "#0E7490" : "#15803D", letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Results</div>
                   {test.results && (
-                    <span style={{ fontSize: 11, color: "#15803D", fontWeight: 500, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 5, padding: "2px 9px" }}>
+                    <span style={{ fontSize: 11, color: test.status === "Test Running" ? "#0E7490" : "#15803D", fontWeight: 500, background: test.status === "Test Running" ? "#ECFEFF" : "#F0FDF4", border: `1px solid ${test.status === "Test Running" ? "#A5F3FC" : "#BBF7D0"}`, borderRadius: 5, padding: "2px 9px" }}>
                       {test.results.goals?.length} goals · {test.results.variantOrder?.length} variants
                     </span>
                   )}
