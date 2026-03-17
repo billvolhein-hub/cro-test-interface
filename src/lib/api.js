@@ -36,13 +36,18 @@ export async function updateClientBrand(id, brand) {
   if (error) throw error;
 }
 
+export async function updateClientCrawlReport(id, crawlReport) {
+  const { error } = await supabase.from("clients").update({ crawl_report: crawlReport }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteClient(id) {
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) throw error;
 }
 
 function rowToClient(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {} };
+  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

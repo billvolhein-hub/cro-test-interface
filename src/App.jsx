@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import {
-  fetchClients, createClient, createClients, updateClient, updateClientBrand, deleteClient,
+  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient,
   fetchTests, createTest, createTests, updateTestField, replaceTest, deleteTest,
 } from "./lib/api";
 import HomePage from "./pages/HomePage";
@@ -83,6 +83,11 @@ export default function App() {
   const onUpdateClientBrand = async (id, brand) => {
     setClients((prev) => prev.map((c) => (c.id === id ? { ...c, brand } : c)));
     await updateClientBrand(id, brand);
+  };
+
+  const onSaveCrawlReport = async (id, crawlReport) => {
+    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, crawlReport } : c)));
+    await updateClientCrawlReport(id, crawlReport);
   };
 
   const onDeleteClient = async (id) => {
@@ -223,6 +228,7 @@ export default function App() {
               clients={clients}
               tests={tests}
               onUpdateTest={onUpdateTest}
+              onSaveCrawlReport={onSaveCrawlReport}
               onUpdateClientBrand={onUpdateClientBrand}
             />
           }

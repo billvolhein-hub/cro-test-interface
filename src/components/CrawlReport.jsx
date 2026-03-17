@@ -396,22 +396,25 @@ function ReplaceBtn({ label, onFile }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function CrawlReport({ clientId }) {
-  const load = (key) => { try { const r = localStorage.getItem(`crawl_${key}_${clientId}`); return r ? JSON.parse(r) : null; } catch { return null; } };
-  const loadStr = (key) => { try { return localStorage.getItem(`crawl_${key}_${clientId}`) || ""; } catch { return ""; } };
+export default function CrawlReport({ crawlReport, onSave }) {
+  const [crawl,     setCrawl]     = useState(crawlReport?.internal ?? null);
+  const [issues,    setIssues]    = useState(crawlReport?.issues   ?? null);
+  const [domain,    setDomain]    = useState(crawlReport?.domain   ?? "");
+  const [crawledAt, setCrawledAt] = useState(crawlReport?.date     ?? "");
+  const [loadingC,  setLoadingC]  = useState(false);
+  const [loadingI,  setLoadingI]  = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [errorC,    setErrorC]    = useState("");
+  const [errorI,    setErrorI]    = useState("");
+  const [open,      setOpen]      = useState(!!(crawlReport?.internal || crawlReport?.issues));
 
-  const [crawl,      setCrawl]      = useState(() => load("internal"));
-  const [issues,     setIssues]     = useState(() => load("issues"));
-  const [domain,     setDomain]     = useState(() => loadStr("domain"));
-  const [crawledAt,  setCrawledAt]  = useState(() => loadStr("date"));
-  const [loadingC,   setLoadingC]   = useState(false);
-  const [loadingI,   setLoadingI]   = useState(false);
-  const [errorC,     setErrorC]     = useState("");
-  const [errorI,     setErrorI]     = useState("");
-  const [open,       setOpen]       = useState(!!(load("internal") || load("issues")));
-
-  const save = (key, val) => localStorage.setItem(`crawl_${key}_${clientId}`, JSON.stringify(val));
-  const del  = (key)      => localStorage.removeItem(`crawl_${key}_${clientId}`);
+  const persist = async (patch) => {
+    if (!onSave) return;
+    setSaving(true);
+    try {
+      await onSave({ internal: crawl, issues, domain, date: crawledAt, ...patch });
+    } finally { setSaving(false); }
+  };
 
   const handleCrawlFile = (file) => {
     setLoadingC(true); setErrorC("");
@@ -422,11 +425,8 @@ export default function CrawlReport({ clientId }) {
         const s = computeStats(allRows, htmlRows, col);
         const dom = htmlRows[0] ? (() => { try { return new URL(htmlRows[0][0]).hostname; } catch { return ""; } })() : "";
         const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        setCrawl(s); setDomain(dom); setCrawledAt(now);
-        save("internal", s); save("domain", dom); save("date", now);
-        localStorage.setItem(`crawl_domain_${clientId}`, dom);
-        localStorage.setItem(`crawl_date_${clientId}`, now);
-        setOpen(true);
+        setCrawl(s); setDomain(dom); setCrawledAt(now); setOpen(true);
+        persist({ internal: s, domain: dom, date: now });
       } catch (err) { setErrorC("Could not parse crawl CSV: " + err.message); }
       finally { setLoadingC(false); }
     };
@@ -440,7 +440,8 @@ export default function CrawlReport({ clientId }) {
       try {
         const raw = parseIssuesCSV(e.target.result);
         const s = computeIssueStats(raw);
-        setIssues(s); save("issues", s); setOpen(true);
+        setIssues(s); setOpen(true);
+        persist({ issues: s });
       } catch (err) { setErrorI("Could not parse issues CSV: " + err.message); }
       finally { setLoadingI(false); }
     };
@@ -448,8 +449,8 @@ export default function CrawlReport({ clientId }) {
   };
 
   const handleClear = () => {
-    ["internal","issues","domain","date"].forEach(del);
     setCrawl(null); setIssues(null); setDomain(""); setCrawledAt("");
+    onSave?.(null);
   };
 
   const hasData = !!(crawl || issues);
@@ -472,6 +473,7 @@ export default function CrawlReport({ clientId }) {
           {crawledAt && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>· {crawledAt}</span>}
           {crawl     && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: TEAL, background: "#CCFBF1", borderRadius: 4, padding: "1px 6px" }}>Internal ✓</span>}
           {issues    && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", borderRadius: 4, padding: "1px 6px" }}>Issues ✓</span>}
+          {saving    && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>Saving…</span>}
         </div>
         {hasData && (
           <button onClick={e => { e.stopPropagation(); handleClear(); }}

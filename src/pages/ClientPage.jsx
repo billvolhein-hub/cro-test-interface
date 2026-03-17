@@ -28,7 +28,7 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ clients, tests, onUpdateTest, onUpdateClientBrand }) {
+export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand }) {
   const { id, clientSlug } = useParams();
   const navigate = useNavigate();
   const { isPortal } = usePortal();
@@ -425,7 +425,11 @@ export default function ClientPage({ clients, tests, onUpdateTest, onUpdateClien
         </div>
 
         {/* ── Crawl Report ── */}
-        <CrawlReport clientId={clientId} />
+        <CrawlReport
+          clientId={clientId}
+          crawlReport={client.crawlReport}
+          onSave={(report) => onSaveCrawlReport?.(clientId, report)}
+        />
 
         {/* ── Tests grouped by stage ── */}
         {/* Client Notes feed */}
