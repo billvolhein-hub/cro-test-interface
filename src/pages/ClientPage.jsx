@@ -5,6 +5,7 @@ import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 import ClientNotesFeed from "../components/ClientNotesFeed";
+import CrawlReport from "../components/CrawlReport";
 import { useBreakpoint } from "../lib/useBreakpoint";
 
 const PIPELINE = [
@@ -422,6 +423,9 @@ export default function ClientPage({ clients, tests, onUpdateTest, onUpdateClien
             ))}
           </div>
         </div>
+
+        {/* ── Crawl Report ── */}
+        <CrawlReport clientId={clientId} />
 
         {/* ── Tests grouped by stage ── */}
         {/* Client Notes feed */}
