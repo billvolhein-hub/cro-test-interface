@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
@@ -7,6 +7,7 @@ import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CA
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import CrawlReport from "../components/CrawlReport";
 import { useBreakpoint } from "../lib/useBreakpoint";
+import { regeneratePortalToken } from "../lib/api";
 
 const PIPELINE = [
   { label: "Backlog",  statuses: ["Backlog"],                          color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
@@ -28,26 +29,40 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand }) {
-  const { id, clientSlug } = useParams();
+export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken }) {
+  const { id, portalToken } = useParams();
   const navigate = useNavigate();
   const { isPortal } = usePortal();
   const { isMobile } = useBreakpoint();
   const client = isPortal
-    ? clients.find(c => toSlug(c.name) === clientSlug)
+    ? clients.find(c => c.portalToken === portalToken)
     : clients.find(c => c.id === Number(id));
   const clientId = client?.id;
 
   const brand = mergeBrand(client?.brand);
 
-  const [editing, setEditing]   = useState(false);
-  const [draft,   setDraft]     = useState(brand);
-  const [saving,  setSaving]    = useState(false);
-  const [saveErr, setSaveErr]   = useState(null);
+  const [editing,        setEditing]        = useState(false);
+  const [draft,          setDraft]          = useState(brand);
+  const [saving,         setSaving]         = useState(false);
+  const [saveErr,        setSaveErr]        = useState(null);
+  const [tokenRegen,     setTokenRegen]     = useState(false);
   const logoRef  = useRef(null);
   const bgImgRef = useRef(null);
 
   if (!client) { navigate("/"); return null; }
+
+  const portalUrl = `${window.location.origin}/portal/${client.portalToken}`;
+
+  const handleRegenerateToken = useCallback(async () => {
+    if (!window.confirm("This will invalidate the current portal link. Anyone using the old link will lose access. Continue?")) return;
+    setTokenRegen(true);
+    try {
+      const newToken = await regeneratePortalToken(clientId);
+      onRegeneratePortalToken?.(clientId, newToken);
+    } finally {
+      setTokenRegen(false);
+    }
+  }, [clientId, onRegeneratePortalToken]);
 
   const clientTests = tests
     .filter(t => (t.clientId ?? clients[0]?.id) === clientId)
@@ -134,7 +149,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
     return (
       <div
         key={t.id}
-        onClick={() => navigate(isPortal ? `/portal/${toSlug(client.name)}/tests/${toSlug(t.testName)}` : `/tests/${t.id}`)}
+        onClick={() => navigate(isPortal ? `/portal/${client.portalToken}/tests/${toSlug(t.testName)}` : `/tests/${t.id}`)}
         style={{
           background: isHighPie ? "linear-gradient(135deg,#fff 80%,#FFFBEB 100%)" : CARD,
           border: `1.5px solid ${isHighPie ? "#F59E0B" : BORDER}`,
@@ -395,11 +410,18 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Client Portal Link</div>
               <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {`${window.location.origin}/portal/${toSlug(client.name)}`}
+                {portalUrl}
               </div>
             </div>
             <button
-              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${toSlug(client.name)}`); }}
+              onClick={handleRegenerateToken}
+              disabled={tokenRegen}
+              title="Invalidate current link and generate a new one"
+              style={{ flexShrink: 0, background: "none", color: MUTED, border: `1px solid ${BORDER}`, padding: "8px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: tokenRegen ? "wait" : "pointer" }}>
+              {tokenRegen ? "…" : "↺ Reset"}
+            </button>
+            <button
+              onClick={() => navigator.clipboard.writeText(portalUrl)}
               style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Copy Link
             </button>

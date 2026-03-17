@@ -246,7 +246,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         if (isPortal) {
           return <PortalHeader client={client} right={
             client && (
-              <button onClick={() => navigate(`/portal/${toSlug(client.name)}`)}
+              <button onClick={() => navigate(`/portal/${client.portalToken}`)}
                 style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.25)", color: client?.brand?.textColor || "#fff", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", backdropFilter: "blur(4px)" }}>
                 ← Portfolio
               </button>

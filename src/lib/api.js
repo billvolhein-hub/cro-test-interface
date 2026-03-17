@@ -46,8 +46,19 @@ export async function deleteClient(id) {
   if (error) throw error;
 }
 
+export async function regeneratePortalToken(id) {
+  const { data, error } = await supabase
+    .from("clients")
+    .update({ portal_token: crypto.randomUUID() })
+    .eq("id", id)
+    .select("portal_token")
+    .single();
+  if (error) throw error;
+  return data.portal_token;
+}
+
 function rowToClient(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null };
+  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null, portalToken: row.portal_token ?? null };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import {
-  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient,
+  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient, regeneratePortalToken,
   fetchTests, createTest, createTests, updateTestField, replaceTest, deleteTest,
 } from "./lib/api";
 import HomePage from "./pages/HomePage";
@@ -88,6 +88,10 @@ export default function App() {
   const onSaveCrawlReport = async (id, crawlReport) => {
     setClients((prev) => prev.map((c) => (c.id === id ? { ...c, crawlReport } : c)));
     await updateClientCrawlReport(id, crawlReport);
+  };
+
+  const onRegeneratePortalToken = (id, portalToken) => {
+    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, portalToken } : c)));
   };
 
   const onDeleteClient = async (id) => {
@@ -230,12 +234,13 @@ export default function App() {
               onUpdateTest={onUpdateTest}
               onSaveCrawlReport={onSaveCrawlReport}
               onUpdateClientBrand={onUpdateClientBrand}
+              onRegeneratePortalToken={onRegeneratePortalToken}
             />
           }
         />
         {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
         <Route
-          path="/portal/:clientSlug"
+          path="/portal/:portalToken"
           element={
             <PortalContext.Provider value={{ isPortal: true }}>
               <ClientPage
@@ -247,7 +252,7 @@ export default function App() {
           }
         />
         <Route
-          path="/portal/:clientSlug/tests/:testSlug"
+          path="/portal/:portalToken/tests/:testSlug"
           element={
             <PortalContext.Provider value={{ isPortal: true }}>
               <TestDetailsPage

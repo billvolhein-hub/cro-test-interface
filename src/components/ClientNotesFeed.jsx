@@ -99,7 +99,7 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
               {visibleNotes.map(({ test, overlay }) => {
                 const client = clients?.find(c => c.id === test.clientId);
                 const testUrl = isPortal
-                  ? `/portal/${toSlug(client?.name)}/tests/${toSlug(test.testName)}?template=1`
+                  ? `/portal/${client?.portalToken}/tests/${toSlug(test.testName)}?template=1`
                   : `/tests/${test.id}?template=1`;
                 const isResolved = !!overlay.resolved;
                 return (
