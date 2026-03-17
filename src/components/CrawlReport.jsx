@@ -208,17 +208,19 @@ function computeIssueStats(issues) {
 }
 
 // ── Chart Primitives ──────────────────────────────────────────────────────────
-function HBar({ label, value, max, color, pct, sub, small }) {
+function HBar({ label, value, max, color, pct }) {
   const width = max > 0 ? Math.max((value / max) * 100, value > 0 ? 2 : 0) : 0;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: small ? 4 : 6 }}>
-      <div style={{ width: small ? 130 : 150, fontSize: 11, color: TEXT, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={label}>{label}</div>
-      <div style={{ flex: 1, height: small ? 10 : 14, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ width: `${width}%`, height: "100%", background: color, borderRadius: 4, transition: "width .4s ease" }} />
-      </div>
-      <div style={{ width: 56, textAlign: "right", flexShrink: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{typeof value === "number" ? value.toLocaleString() : value}</span>
-        {pct != null && <span style={{ fontSize: 10, color: MUTED, marginLeft: 3 }}>{pct}%</span>}
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 11, color: TEXT, marginBottom: 3, lineHeight: 1.3 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, height: 12, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ width: `${width}%`, height: "100%", background: color, borderRadius: 4, transition: "width .4s ease" }} />
+        </div>
+        <div style={{ width: 64, textAlign: "right", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{typeof value === "number" ? value.toLocaleString() : value}</span>
+          {pct != null && <span style={{ fontSize: 10, color: MUTED, marginLeft: 3 }}>{pct}%</span>}
+        </div>
       </div>
     </div>
   );
@@ -332,25 +334,26 @@ function IssueListCard({ title, hint, issues, showFix }) {
         const tColor = TYPE_COLORS[issue.type] || "#6B7280";
         const isOpen = expanded === idx;
         return (
-          <div key={idx} style={{ marginBottom: 6 }}>
-            <div
-              onClick={() => setExpanded(isOpen ? null : idx)}
-              style={{ display: "flex", alignItems: "center", gap: 8, cursor: showFix ? "pointer" : "default" }}
-            >
-              <div style={{ width: 130, fontSize: 10, color: TEXT, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                title={issue.name}>{issue.name.replace(/^[^:]+:\s*/, "")}</div>
-              <div style={{ flex: 1, height: 10, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${Math.max((issue.urls / max) * 100, issue.urls > 0 ? 2 : 0)}%`, height: "100%", background: pColor, borderRadius: 4 }} />
+          <div key={idx} style={{ marginBottom: 10, cursor: showFix ? "pointer" : "default" }} onClick={() => setExpanded(isOpen ? null : idx)}>
+            {/* Label row */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 11, color: TEXT, lineHeight: 1.4, flex: 1 }}>
+                {issue.name.replace(/^[^:]+:\s*/, "")}
               </div>
-              <div style={{ width: 50, textAlign: "right", flexShrink: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: TEXT }}>{issue.urls.toLocaleString()}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{issue.urls.toLocaleString()}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: pColor, background: PRIORITY_BG[issue.priority] || "#F9FAFB", borderRadius: 3, padding: "1px 5px" }}>
+                  {issue.priority}
+                </span>
               </div>
-              <span style={{ fontSize: 9, fontWeight: 700, color: pColor, background: PRIORITY_BG[issue.priority] || "#F9FAFB", borderRadius: 3, padding: "1px 5px", flexShrink: 0 }}>
-                {issue.priority}
-              </span>
             </div>
+            {/* Bar row */}
+            <div style={{ height: 8, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ width: `${Math.max((issue.urls / max) * 100, issue.urls > 0 ? 2 : 0)}%`, height: "100%", background: pColor, borderRadius: 4 }} />
+            </div>
+            {/* Expanded fix */}
             {isOpen && issue.fix && (
-              <div style={{ marginTop: 4, marginLeft: 8, fontSize: 10, color: MUTED, lineHeight: 1.5, background: "#F9FAFB", border: `1px solid ${BORDER}`, borderRadius: 5, padding: "7px 10px" }}>
+              <div style={{ marginTop: 6, fontSize: 10, color: MUTED, lineHeight: 1.5, background: "#F9FAFB", border: `1px solid ${BORDER}`, borderRadius: 5, padding: "7px 10px" }}>
                 <strong style={{ color: TEXT }}>Fix: </strong>{issue.fix}
               </div>
             )}
