@@ -142,7 +142,7 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
     const row = parseCSV(pasteText);
     if (!row) { setPasteError("Paste a header row and a data row (comma or tab separated)."); return; }
     const fields = mapCSVToTest(row);
-    if (Object.keys(fields).length === 0) { setPasteError("No recognised column headers found. Expected: Test Name, Page URL, Test Type, Audience, Primary Metric, Secondary Metrics, If, Then, Because, Potential, Importance, Ease"); return; }
+    if (Object.keys(fields).length === 0) { setPasteError("No recognised column headers found. Expected headers from the Testing Calendar: Test Name, Page / Campaign, Hypothesis Statement, Test Type, Audience Type, Primary Metric, Secondary Metric, Status, Next Step / Learning"); return; }
     onReplaceTest({ ...test, ...fields });
     setPasteText("");
     setPasteOpen(false);
@@ -224,12 +224,12 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
             {pasteOpen && (
               <div style={{ padding: "0 18px 16px" }}>
                 <div style={{ fontSize: 11, color: MUTED, marginBottom: 8, lineHeight: 1.6 }}>
-                  Copy a header row + one data row from Google Sheets and paste below (comma or tab separated). Recognised columns: <em>Test Name, Page URL, Test Type, Audience, Primary Metric, Secondary Metrics, If, Then, Because, Potential, Importance, Ease</em>
+                  Copy a header row + one data row from the Testing Calendar and paste below (comma or tab separated). Recognised columns: <em>Test Name, Page / Campaign, Test Type, Audience Type, Primary Metric, Secondary Metric, Hypothesis Statement, If, Then, Because, Status, Next Step / Learning</em>
                 </div>
                 <textarea
                   value={pasteText}
                   onChange={e => setPasteText(e.target.value)}
-                  placeholder={"Test Name\tPage URL\tIf\tThen\tBecause\nMy test\t/page\twe do X\tY improves\tbecause Z"}
+                  placeholder={"Test Name\tPage / Campaign\tHypothesis Statement\tPrimary Metric\tStatus\nMy test\t/page\tIF we do X — THEN Y improves — BECAUSE Z\tRFI Submit\tBacklog"}
                   style={{ width: "100%", height: 90, fontFamily: "monospace", fontSize: 11, color: TEXT, background: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 6, padding: 10, resize: "vertical", lineHeight: 1.5, outline: "none" }}
                 />
                 {pasteError && (

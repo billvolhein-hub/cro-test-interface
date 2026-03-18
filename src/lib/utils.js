@@ -77,25 +77,31 @@ export function mapCSVToTest(row) {
 
   const result = {};
 
+  // ── Test Name ──────────────────────────────────────────────────────────────
   const testName = get("test name", "testname", "name", "test");
   if (testName !== undefined) result.testName = testName;
 
-  const pageUrl = get("page url", "pageurl", "url", "page", "page / url");
+  // ── Page URL ───────────────────────────────────────────────────────────────
+  const pageUrl = get("page / campaign", "page", "page url", "pageurl", "url", "page / url");
   if (pageUrl !== undefined) result.pageUrl = pageUrl;
 
+  // ── Test Type ──────────────────────────────────────────────────────────────
   const testType = get("test type", "testtype", "type");
   if (testType !== undefined) result.testType = testType;
 
-  const audience = get("audience", "segment", "audience / segment");
+  // ── Audience ───────────────────────────────────────────────────────────────
+  const audience = get("audience type", "audience", "segment", "audience / segment");
   if (audience !== undefined) result.audience = audience;
 
+  // ── Metrics ────────────────────────────────────────────────────────────────
   const primary = get("primary metric", "primarymetric", "primary");
   if (primary !== undefined) result.primaryMetric = primary;
 
-  const secondary = get("secondary metrics", "secondarymetrics", "secondary");
+  const secondary = get("secondary metric", "secondary metrics", "secondarymetrics", "secondary");
   if (secondary !== undefined)
     result.secondaryMetrics = secondary.split(",").map(s => s.trim()).filter(Boolean);
 
+  // ── Hypothesis (individual fields take priority; combined field is parsed as fallback) ──
   const ifVal = get("if", "if — the change", "if - the change", "change", "if (the change)");
   if (ifVal !== undefined) result.if = ifVal;
 
@@ -105,6 +111,22 @@ export function mapCSVToTest(row) {
   const because = get("because", "because — the rationale", "because - the rationale", "rationale", "because (the rationale)");
   if (because !== undefined) result.because = because;
 
+  // "Hypothesis" / "Hypothesis Statement" column — parse "IF … — THEN … — BECAUSE …" format
+  if (result.if === undefined && result.then === undefined && result.because === undefined) {
+    const hypo = get("hypothesis statement", "hypothesis");
+    if (hypo !== undefined) {
+      const ifMatch      = hypo.match(/^IF\s+(.+?)(?:\s+—\s+THEN\s+|$)/i);
+      const thenMatch    = hypo.match(/THEN\s+(.+?)(?:\s+—\s+BECAUSE\s+|$)/i);
+      const becauseMatch = hypo.match(/BECAUSE\s+(.+)$/i);
+      if (ifMatch)      result.if      = ifMatch[1].trim();
+      if (thenMatch)    result.then    = thenMatch[1].trim();
+      if (becauseMatch) result.because = becauseMatch[1].trim();
+      // If it doesn't match the IF/THEN/BECAUSE pattern, store the whole text as "because"
+      if (!ifMatch && !thenMatch && !becauseMatch) result.because = hypo;
+    }
+  }
+
+  // ── PIE Scores ─────────────────────────────────────────────────────────────
   const potential = get("potential", "potential (1-10)");
   if (potential !== undefined) { const n = Number(potential); if (n >= 1 && n <= 10) result.potential = n; }
 
@@ -114,17 +136,32 @@ export function mapCSVToTest(row) {
   const ease = get("ease", "ease (1-10)");
   if (ease !== undefined) { const n = Number(ease); if (n >= 1 && n <= 10) result.ease = n; }
 
+  // ── Next Step / Learning → Findings ───────────────────────────────────────
+  const findings = get("next step / learning", "next step", "learning", "notes");
+  if (findings !== undefined) result.findings = findings;
+
+  // ── Client ─────────────────────────────────────────────────────────────────
   const clientName = get("client", "client name", "clientname");
   if (clientName !== undefined) result.clientName = clientName;
 
-  const VALID_STATUSES = ["backlog", "under review", "promoted to test", "test running", "test complete"];
+  // ── Status (maps both app values and calendar sheet values) ───────────────
   const status = get("status", "test status");
   if (status !== undefined) {
-    const normalised = status.trim().toLowerCase();
-    const match = ["Backlog", "Under Review", "Promoted to Test", "Test Running", "Test Complete"]
-      .find(s => s.toLowerCase() === normalised);
-    if (match) result.status = match;
-    void VALID_STATUSES; // suppress unused warning
+    const s = status.trim().toLowerCase();
+    const statusMap = {
+      "backlog":               "Backlog",
+      "under review":          "Under Review",
+      "promoted to test":      "Promoted to Test",
+      "promoted to experiment":"Promoted to Test",
+      "planned":               "Promoted to Test",
+      "in queue":              "Backlog",
+      "on hold":               "Under Review",
+      "test running":          "Test Running",
+      "active":                "Test Running",
+      "test complete":         "Test Complete",
+      "complete":              "Test Complete",
+    };
+    if (statusMap[s]) result.status = statusMap[s];
   }
 
   return result;

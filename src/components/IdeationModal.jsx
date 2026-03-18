@@ -293,6 +293,7 @@ export default function IdeationModal({
 
     const testData = {
       testName:         rec.testName,
+      pageUrl:          pageUrl || rec.pageUrl || "",
       if:               rec.if,
       then:             rec.then,
       because:          rec.because,
