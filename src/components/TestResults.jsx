@@ -328,8 +328,9 @@ export default function TestResults({ results, onImport, onClear }) {
   }, 0);
 
   const dayCount = (() => {
-    if (!results.startDate || !results.endDate) return null;
-    const ms = new Date(results.endDate) - new Date(results.startDate);
+    if (!results.startDate) return null;
+    const end = results.endDate ? new Date(results.endDate) : new Date();
+    const ms = end - new Date(results.startDate);
     return Math.round(ms / 86400000) + 1;
   })();
 
@@ -341,10 +342,10 @@ export default function TestResults({ results, onImport, onClear }) {
           { label: "Visitors", value: totalVisitors.toLocaleString() },
           { label: "Variants", value: results.variantOrder.length },
           { label: "Goals Tracked", value: results.goals.length },
-          ...(dayCount ? [{ label: "Duration", value: `${dayCount}d` }] : []),
-          ...(results.startDate ? [{ label: "Period", value: `${results.startDate} → ${results.endDate}` }] : []),
+          ...(dayCount ? [{ label: "Days Running", value: `${dayCount}d` }] : []),
+          ...(results.startDate ? [{ label: "Report Range", value: `${results.startDate} → ${results.endDate || "Present"}` }] : []),
         ].map(s => (
-          <div key={s.label} style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", flex: s.label === "Period" ? "1 1 auto" : "0 0 auto" }}>
+          <div key={s.label} style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", flex: s.label === "Report Range" ? "1 1 auto" : "0 0 auto" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: "uppercase" }}>{s.label}</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginTop: 1 }}>{s.value}</div>
           </div>

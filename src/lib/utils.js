@@ -437,12 +437,32 @@ export async function fetchConvertResults(experienceId) {
     inner.reportData, goalNames, inner.variations_data, experienceId
   );
 
+  // ── 4. Fetch experience details for start/end dates ───────────────────────
+  const fmtApiDate = (val) => {
+    if (!val) return "";
+    const d = new Date(typeof val === "number" ? val * 1000 : val);
+    return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+  };
+
+  let startDate = "", endDate = "";
+  try {
+    const expTarget  = `${base}/experiences/${experienceId}`;
+    const expHeaders = await convertHeaders(appId, appSecret, expTarget, null);
+    const expRes     = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
+    if (expRes.ok) {
+      const expRaw  = await expRes.json();
+      const expData = expRaw?.data ?? expRaw;
+      startDate = fmtApiDate(expData?.start_time);
+      endDate   = fmtApiDate(expData?.end_time);
+    }
+  } catch { /* non-fatal — badges just won't show */ }
+
   return {
     convertExperienceId: String(experienceId),
     testId:    String(experienceId),
     testName:  "",
-    startDate: "",
-    endDate:   "",
+    startDate,
+    endDate,
     syncedAt:  new Date().toISOString(),
     variantOrder,
     goals,

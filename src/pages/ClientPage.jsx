@@ -8,6 +8,7 @@ import ClientNotesFeed from "../components/ClientNotesFeed";
 import CrawlReport from "../components/CrawlReport";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { regeneratePortalToken } from "../lib/api";
+import { exportTestingCalendar } from "../lib/exportCalendar";
 
 const PIPELINE = [
   { label: "Backlog",  statuses: ["Backlog"],                          color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
@@ -424,6 +425,21 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
               onClick={() => navigator.clipboard.writeText(portalUrl)}
               style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Copy Link
+            </button>
+          </div>
+        )}
+
+        {/* ── Export Testing Calendar (admin only) ── */}
+        {!isPortal && (
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Testing Calendar Export</div>
+              <div style={{ fontSize: 12, color: MUTED }}>Downloads an Excel file with Test Ideation and Testing Calendar tabs</div>
+            </div>
+            <button
+              onClick={() => exportTestingCalendar(client.name, clientTests, brand)}
+              style={{ flexShrink: 0, background: "#15803D", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              ↓ Export .xlsx
             </button>
           </div>
         )}
