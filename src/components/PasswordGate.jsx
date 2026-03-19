@@ -29,13 +29,17 @@ export function AdminGate({ children }) {
 
   return (
     <GateScreen
-      title="Admin Access"
+      title={
+        <span style={{ color: TEXT }}>MetricsEdge</span>
+      }
       logo={
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/>
-            <path d="M9 12l2 2 4-4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20, gap: 6 }}>
+          <svg width="52" height="52" viewBox="0 0 36 36" fill="none">
+            <rect x="2"  y="10" width="8" height="22" rx="2" fill="#C9A84C"/>
+            <rect x="14" y="5"  width="8" height="27" rx="2" fill="#2A8C8C"/>
+            <rect x="26" y="1"  width="8" height="31" rx="2" fill="#1B3A6B"/>
           </svg>
+          <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: 2, textTransform: "uppercase" }}>Test Builder</div>
         </div>
       }
       subtitle="Enter your admin password to continue"
@@ -116,7 +120,7 @@ function GateScreen({ title, subtitle, logo, input, setInput, error, setError, o
 
         {logo}
 
-        <div style={{ fontSize: 20, fontWeight: 800, color: TEXT, marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: TEXT, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>{title}</div>
         <div style={{ fontSize: 13, color: MUTED, marginBottom: 28 }}>{subtitle}</div>
 
         <input
