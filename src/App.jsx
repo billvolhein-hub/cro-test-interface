@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import {
-  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient, regeneratePortalToken,
+  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient, regeneratePortalToken, updateClientPortalPassword,
   fetchTests, createTest, createTests, updateTestField, replaceTest, deleteTest,
 } from "./lib/api";
 import HomePage from "./pages/HomePage";
@@ -10,6 +10,20 @@ import TestDetailsPage from "./pages/TestDetailsPage";
 import TestDefinitionPage from "./pages/TestDefinitionPage";
 import ClientPage from "./pages/ClientPage";
 import { PortalContext } from "./context/PortalContext";
+import { AdminGate, PortalGate } from "./components/PasswordGate";
+
+// Reads portalToken from URL params, finds the client, applies PortalGate + PortalContext
+function PortalTokenGate({ clients, children }) {
+  const { portalToken } = useParams();
+  const client = clients.find(c => c.portalToken === portalToken);
+  return (
+    <PortalGate client={client}>
+      <PortalContext.Provider value={{ isPortal: true }}>
+        {children}
+      </PortalContext.Provider>
+    </PortalGate>
+  );
+}
 
 export default function App() {
   const [tests, setTests] = useState([]);
@@ -92,6 +106,11 @@ export default function App() {
 
   const onRegeneratePortalToken = (id, portalToken) => {
     setClients((prev) => prev.map((c) => (c.id === id ? { ...c, portalToken } : c)));
+  };
+
+  const onUpdatePortalPassword = async (id, password) => {
+    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, portalPassword: password || null } : c)));
+    await updateClientPortalPassword(id, password);
   };
 
   const onDeleteClient = async (id) => {
@@ -177,84 +196,28 @@ export default function App() {
         <Route
           path="/"
           element={
-            <HomePage
-              tests={tests}
-              onCreateTest={onCreateTest}
-              onCreateTests={onCreateTests}
-              onDeleteTest={onDeleteTest}
-              onUpdateTest={onUpdateTest}
-              clients={clients}
-              onCreateClient={onCreateClient}
-              onCreateClients={onCreateClients}
-              onUpdateClient={onUpdateClient}
-              onDeleteClient={onDeleteClient}
-              onSaveScreenshot={onSaveScreenshot}
-              onSaveScreenshots={onSaveScreenshots}
-            />
+            <AdminGate>
+              <HomePage
+                tests={tests}
+                onCreateTest={onCreateTest}
+                onCreateTests={onCreateTests}
+                onDeleteTest={onDeleteTest}
+                onUpdateTest={onUpdateTest}
+                clients={clients}
+                onCreateClient={onCreateClient}
+                onCreateClients={onCreateClients}
+                onUpdateClient={onUpdateClient}
+                onDeleteClient={onDeleteClient}
+                onSaveScreenshot={onSaveScreenshot}
+                onSaveScreenshots={onSaveScreenshots}
+              />
+            </AdminGate>
           }
         />
         <Route
           path="/tests/:id"
           element={
-            <TestDetailsPage
-              tests={tests}
-              screenshotsMap={screenshotsMap}
-              setScreenshotsMap={setScreenshotsMap}
-              onUpdateTest={onUpdateTest}
-              onDeleteTest={onDeleteTest}
-              onSaveScreenshot={onSaveScreenshot}
-              onClearScreenshot={onClearScreenshot}
-              clients={clients}
-            />
-          }
-        />
-        <Route
-          path="/tests/:id/edit"
-          element={
-            <TestDefinitionPage
-              tests={tests}
-              screenshotsMap={screenshotsMap}
-              setScreenshotsMap={setScreenshotsMap}
-              onUpdateTest={onUpdateTest}
-              onReplaceTest={onReplaceTest}
-              onDeleteTest={onDeleteTest}
-              onSaveScreenshot={onSaveScreenshot}
-              onClearScreenshot={onClearScreenshot}
-              clients={clients}
-              onCreateClient={onCreateClient}
-            />
-          }
-        />
-        <Route
-          path="/clients/:id"
-          element={
-            <ClientPage
-              clients={clients}
-              tests={tests}
-              onUpdateTest={onUpdateTest}
-              onSaveCrawlReport={onSaveCrawlReport}
-              onUpdateClientBrand={onUpdateClientBrand}
-              onRegeneratePortalToken={onRegeneratePortalToken}
-            />
-          }
-        />
-        {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
-        <Route
-          path="/portal/:portalToken"
-          element={
-            <PortalContext.Provider value={{ isPortal: true }}>
-              <ClientPage
-                clients={clients}
-                tests={tests}
-                onUpdateClientBrand={onUpdateClientBrand}
-              />
-            </PortalContext.Provider>
-          }
-        />
-        <Route
-          path="/portal/:portalToken/tests/:testSlug"
-          element={
-            <PortalContext.Provider value={{ isPortal: true }}>
+            <AdminGate>
               <TestDetailsPage
                 tests={tests}
                 screenshotsMap={screenshotsMap}
@@ -265,7 +228,72 @@ export default function App() {
                 onClearScreenshot={onClearScreenshot}
                 clients={clients}
               />
-            </PortalContext.Provider>
+            </AdminGate>
+          }
+        />
+        <Route
+          path="/tests/:id/edit"
+          element={
+            <AdminGate>
+              <TestDefinitionPage
+                tests={tests}
+                screenshotsMap={screenshotsMap}
+                setScreenshotsMap={setScreenshotsMap}
+                onUpdateTest={onUpdateTest}
+                onReplaceTest={onReplaceTest}
+                onDeleteTest={onDeleteTest}
+                onSaveScreenshot={onSaveScreenshot}
+                onClearScreenshot={onClearScreenshot}
+                clients={clients}
+                onCreateClient={onCreateClient}
+              />
+            </AdminGate>
+          }
+        />
+        <Route
+          path="/clients/:id"
+          element={
+            <AdminGate>
+              <ClientPage
+                clients={clients}
+                tests={tests}
+                onUpdateTest={onUpdateTest}
+                onSaveCrawlReport={onSaveCrawlReport}
+                onUpdateClientBrand={onUpdateClientBrand}
+                onRegeneratePortalToken={onRegeneratePortalToken}
+                onUpdatePortalPassword={onUpdatePortalPassword}
+              />
+            </AdminGate>
+          }
+        />
+        {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
+        <Route
+          path="/portal/:portalToken"
+          element={
+            <PortalTokenGate clients={clients}>
+              <ClientPage
+                clients={clients}
+                tests={tests}
+                onUpdateClientBrand={onUpdateClientBrand}
+              />
+            </PortalTokenGate>
+          }
+        />
+        <Route
+          path="/portal/:portalToken/tests/:testSlug"
+          element={
+            <PortalTokenGate clients={clients}>
+              <TestDetailsPage
+                tests={tests}
+                screenshotsMap={screenshotsMap}
+                setScreenshotsMap={setScreenshotsMap}
+                onUpdateTest={onUpdateTest}
+                onDeleteTest={onDeleteTest}
+                onSaveScreenshot={onSaveScreenshot}
+                onClearScreenshot={onClearScreenshot}
+                clients={clients}
+              />
+            </PortalTokenGate>
           }
         />
 

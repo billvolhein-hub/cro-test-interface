@@ -30,7 +30,7 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken }) {
+export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken, onUpdatePortalPassword }) {
   const { id, portalToken } = useParams();
   const navigate = useNavigate();
   const { isPortal } = usePortal();
@@ -47,6 +47,9 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
   const [saving,         setSaving]         = useState(false);
   const [saveErr,        setSaveErr]        = useState(null);
   const [tokenRegen,     setTokenRegen]     = useState(false);
+  const [pwDraft,        setPwDraft]        = useState("");
+  const [pwSaving,       setPwSaving]       = useState(false);
+  const [pwVisible,      setPwVisible]      = useState(false);
   const logoRef  = useRef(null);
   const bgImgRef = useRef(null);
 
@@ -426,6 +429,48 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
               style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
               Copy Link
             </button>
+          </div>
+        )}
+
+        {/* ── Portal Password (admin only) ── */}
+        {!isPortal && (
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Portal Password</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, position: "relative" }}>
+                <input
+                  type={pwVisible ? "text" : "password"}
+                  value={pwDraft !== "" ? pwDraft : (client.portalPassword ?? "")}
+                  onChange={e => setPwDraft(e.target.value)}
+                  placeholder={client.portalPassword ? "••••••••" : "No password set — portal is open"}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 36px 8px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
+                />
+                <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}>
+                  {pwVisible ? "Hide" : "Show"}
+                </button>
+              </div>
+              <button
+                disabled={pwSaving}
+                onClick={async () => {
+                  setPwSaving(true);
+                  await onUpdatePortalPassword?.(clientId, pwDraft);
+                  setPwDraft("");
+                  setPwSaving(false);
+                }}
+                style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: pwSaving ? "wait" : "pointer", opacity: pwSaving ? 0.7 : 1 }}>
+                {pwSaving ? "Saving…" : "Save"}
+              </button>
+              {client.portalPassword && (
+                <button
+                  onClick={async () => { await onUpdatePortalPassword?.(clientId, ""); setPwDraft(""); }}
+                  style={{ flexShrink: 0, background: "none", color: "#DC2626", border: "1px solid #FECACA", padding: "8px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>
+              {client.portalPassword ? "Clients must enter this password to view the portal." : "Set a password to restrict portal access."}
+            </div>
           </div>
         )}
 

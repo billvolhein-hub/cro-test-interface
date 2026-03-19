@@ -46,6 +46,11 @@ export async function deleteClient(id) {
   if (error) throw error;
 }
 
+export async function updateClientPortalPassword(id, password) {
+  const { error } = await supabase.from("clients").update({ portal_password: password || null }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function regeneratePortalToken(id) {
   const { data, error } = await supabase
     .from("clients")
@@ -58,7 +63,7 @@ export async function regeneratePortalToken(id) {
 }
 
 function rowToClient(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null, portalToken: row.portal_token ?? null };
+  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null, portalToken: row.portal_token ?? null, portalPassword: row.portal_password ?? null };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
