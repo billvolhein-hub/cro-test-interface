@@ -471,7 +471,7 @@ export default function CrawlReport({ crawlReport, onSave }) {
           </svg>
         </div>
         <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: TEAL, letterSpacing: 0.5 }}>
-          Crawl Report
+          SEO Report
           {domain    && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: MUTED }}>{domain}</span>}
           {crawledAt && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>· {crawledAt}</span>}
           {crawl     && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: TEAL, background: "#CCFBF1", borderRadius: 4, padding: "1px 6px" }}>Internal ✓</span>}

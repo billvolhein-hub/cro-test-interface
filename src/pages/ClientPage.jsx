@@ -489,7 +489,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           </div>
         )}
 
-        {/* ── Crawl Report ── */}
+        {/* ── SEO Report ── */}
         <CrawlReport
           clientId={clientId}
           crawlReport={client.crawlReport}
