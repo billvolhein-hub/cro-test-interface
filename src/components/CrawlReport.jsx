@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle } from "react";
 import { CARD, BORDER, BG, TEXT, MUTED, TEAL, ACCENT } from "../lib/constants";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -133,13 +133,26 @@ function computeStats(allRows, htmlRows, col) {
   }
 
   const inlinks = { "Orphaned (0)":0,"Low (1–10)":0,"Medium (11–50)":0,"High (50+)":0 };
-  for (const r of htmlRows) {
-    const v = parseInt(col(r, "Unique Inlinks")) || 0;
+  const inlinkRows = htmlRows.map(r => ({
+    url:    col(r, "Address"),
+    title:  col(r, "Title 1"),
+    depth:  parseInt(col(r, "Crawl Depth")) || 0,
+    links:  parseInt(col(r, "Unique Inlinks")) || 0,
+  }));
+  for (const r of inlinkRows) {
+    const v = r.links;
     if (v === 0) inlinks["Orphaned (0)"]++; else if (v <= 10) inlinks["Low (1–10)"]++; else if (v <= 50) inlinks["Medium (11–50)"]++; else inlinks["High (50+)"]++;
   }
-  const topInlinks = [...htmlRows]
-    .map(r => ({ url: col(r, "Address"), inlinks: parseInt(col(r, "Unique Inlinks")) || 0, title: col(r, "Title 1") }))
-    .sort((a, b) => b.inlinks - a.inlinks).slice(0, 12);
+  const orphanedPages = inlinkRows.filter(r => r.links === 0).sort((a, b) => a.depth - b.depth);
+  const buriedPages   = inlinkRows.filter(r => r.depth >= 3 && r.links <= 5 && r.links > 0).sort((a, b) => b.depth - a.depth || a.links - b.links).slice(0, 10);
+  // Link concentration: what % of pages hold 80% of all inlinks
+  const sortedByLinks = [...inlinkRows].sort((a, b) => b.links - a.links);
+  const totalInlinks  = sortedByLinks.reduce((s, r) => s + r.links, 0);
+  let cumLinks = 0, topPct = 0;
+  for (let i = 0; i < sortedByLinks.length; i++) {
+    cumLinks += sortedByLinks[i].links;
+    if (cumLinks / totalInlinks >= 0.8) { topPct = Math.round(((i + 1) / sortedByLinks.length) * 100); break; }
+  }
 
   const carbon = {}; let co2Total = 0;
   for (const r of htmlRows) { const rt2 = col(r, "Carbon Rating") || "N/A"; bucket(carbon, rt2); co2Total += parseFloat(col(r, "CO2 (mg)")) || 0; }
@@ -169,11 +182,187 @@ function computeStats(allRows, htmlRows, col) {
     totalCO2: (co2Total / 1000).toFixed(1),
     statusCodes, depth, rt, size, title, meta, h1,
     readability, flesch, wordCount, spelling, grammar,
-    inlinks, topInlinks, carbon, intent, sentiment, urBuckets,
+    inlinks, orphanedPages, buriedPages, topPct, carbon, intent, sentiment, urBuckets,
   };
 }
 
 // ── Issues Stats ──────────────────────────────────────────────────────────────
+// ── Accessibility Scoring ──────────────────────────────────────────────────────
+const A11Y_PRIORITY_WEIGHT = { High: 100, Medium: 55, Low: 20 };
+
+function issueImpactScore(issue) {
+  const base = A11Y_PRIORITY_WEIGHT[issue.priority] ?? 20;
+  const coverage = Math.min(issue.pct / 100, 1); // 0–1
+  return Math.round(base * coverage);
+}
+
+function a11yHealthScore(issues) {
+  if (!issues.length) return 100;
+  // Penalty per issue: High×0.45, Medium×0.15, Low×0.04 × pct coverage, capped at 100
+  const PENALTY = { High: 0.45, Medium: 0.15, Low: 0.04 };
+  const penalty = issues.reduce((sum, i) => {
+    return sum + (PENALTY[i.priority] ?? 0.04) * Math.min(i.pct, 100);
+  }, 0);
+  return Math.max(0, Math.round(100 - penalty));
+}
+
+function scoreGrade(score) {
+  if (score >= 90) return { grade: "A", color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", label: "Excellent" };
+  if (score >= 75) return { grade: "B", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", label: "Good" };
+  if (score >= 60) return { grade: "C", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", label: "Needs Work" };
+  if (score >= 40) return { grade: "D", color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", label: "Poor" };
+  return           { grade: "F", color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", label: "Critical" };
+}
+
+// ── Accessibility Health Gauge ─────────────────────────────────────────────────
+function A11yGauge({ score }) {
+  const { grade, color, bg, border, label } = scoreGrade(score);
+  // SVG half-circle gauge: 180° arc, filled to score%
+  const R = 54, cx = 70, cy = 66;
+  const toRad = d => (d * Math.PI) / 180;
+  // Arc from 180° (left) to 0° (right) — half circle
+  const arcPct = score / 100;
+  const sweepDeg = 180 * arcPct;
+  const startA = 180;
+  const endA   = 180 - sweepDeg;
+  const x1 = cx + R * Math.cos(toRad(startA));
+  const y1 = cy + R * Math.sin(toRad(startA));
+  const x2 = cx + R * Math.cos(toRad(endA));
+  const y2 = cy + R * Math.sin(toRad(endA));
+  const largeArc = sweepDeg > 180 ? 1 : 0;
+  // Track path (full half)
+  const tx1 = cx - R, ty1 = cy;
+  const tx2 = cx + R, ty2 = cy;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 160 }}>
+      <svg width="140" height="80" viewBox="0 0 140 80">
+        {/* Track */}
+        <path d={`M ${tx1} ${ty1} A ${R} ${R} 0 0 1 ${tx2} ${ty2}`}
+          fill="none" stroke="#E5E7EB" strokeWidth="10" strokeLinecap="round" />
+        {/* Filled arc */}
+        {score > 0 && (
+          <path d={`M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 0 ${x2} ${y2}`}
+            fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" />
+        )}
+        {/* Score text */}
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="22" fontWeight="800" fill={color} fontFamily="Inter,sans-serif">{score}</text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fontSize="9" fontWeight="700" fill="#9CA3AF" fontFamily="Inter,sans-serif" letterSpacing="1.5">/ 100</text>
+      </svg>
+      <div style={{ marginTop: -8, display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 18, fontWeight: 900, color, background: bg, border: `1.5px solid ${border}`, borderRadius: 6, padding: "2px 10px", lineHeight: 1.4 }}>{grade}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4, textAlign: "center" }}>Accessibility Health Score</div>
+    </div>
+  );
+}
+
+// impactGrade: higher score = worse = redder (opposite of scoreGrade)
+function impactGrade(score) {
+  if (score >= 80) return { label: "Critical", color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", bar: "#DC2626" };
+  if (score >= 60) return { label: "Severe",   color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", bar: "#EA580C" };
+  if (score >= 35) return { label: "Moderate", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", bar: "#D97706" };
+  if (score >= 15) return { label: "Minor",    color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", bar: "#2563EB" };
+  return            { label: "Minimal",  color: "#6B7280", bg: "#F9FAFB", border: "#E5E7EB", bar: "#9CA3AF" };
+}
+
+// ── Issue Impact Cards ─────────────────────────────────────────────────────────
+function A11yIssueGrid({ issues }) {
+  const sorted = [...issues].sort((a, b) => issueImpactScore(b) - issueImpactScore(a));
+  const PRIORITY_COLOR = { High: "#DC2626", Medium: "#D97706", Low: "#16A34A" };
+  const PRIORITY_BG    = { High: "#FEF2F2", Medium: "#FFFBEB", Low: "#F0FDF4" };
+  const TYPE_COLOR     = { Issue: "#DC2626", Warning: "#D97706", Opportunity: "#2563EB" };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, width: "100%" }}>
+      {sorted.map((issue, idx) => {
+        const impact  = issueImpactScore(issue);
+        const { label: sevLabel, color: sevColor, bg: sevBg, border: sevBorder, bar: barColor } = impactGrade(impact);
+        const pColor  = PRIORITY_COLOR[issue.priority] ?? "#6B7280";
+        const pBg     = PRIORITY_BG[issue.priority]    ?? "#F9FAFB";
+        const tColor  = TYPE_COLOR[issue.type]         ?? "#6B7280";
+        const name    = issue.name.replace(/^[^:]+:\s*/, "");
+
+        return (
+          <div key={idx} style={{
+            background: "#fff",
+            border: `1.5px solid ${sevBorder}`,
+            borderLeft: `4px solid ${sevColor}`,
+            borderRadius: 8,
+            overflow: "hidden",
+          }}>
+            {/* Header row */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px 10px" }}>
+              {/* Score block */}
+              <div style={{ flexShrink: 0, textAlign: "center", background: sevBg, border: `1px solid ${sevBorder}`, borderRadius: 7, padding: "6px 10px", minWidth: 54 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: sevColor, lineHeight: 1 }}>{impact}</div>
+                <div style={{ fontSize: 8, fontWeight: 800, color: sevColor, letterSpacing: 0.8, textTransform: "uppercase", marginTop: 2 }}>{sevLabel}</div>
+              </div>
+              {/* Name + badges */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: TEXT, lineHeight: 1.4, marginBottom: 6 }}>{name}</div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: pColor, background: pBg, border: `1px solid ${pColor}33`, borderRadius: 4, padding: "2px 7px" }}>{issue.priority} Priority</span>
+                  {issue.type && <span style={{ fontSize: 9, fontWeight: 700, color: tColor, background: `${tColor}12`, border: `1px solid ${tColor}33`, borderRadius: 4, padding: "2px 7px" }}>{issue.type}</span>}
+                </div>
+              </div>
+              {/* Page count */}
+              <div style={{ flexShrink: 0, textAlign: "right" }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: sevColor }}>{issue.pct.toFixed(0)}%</div>
+                <div style={{ fontSize: 9, color: MUTED, fontWeight: 600 }}>of pages</div>
+                <div style={{ fontSize: 9, color: MUTED }}>{issue.urls.toLocaleString()} URLs</div>
+              </div>
+            </div>
+
+            {/* Coverage bar — full width, colored by severity */}
+            <div style={{ height: 6, background: "#F3F4F6" }}>
+              <div style={{ width: `${Math.min(issue.pct, 100)}%`, height: "100%", background: barColor, transition: "width .5s ease" }} />
+            </div>
+
+            {/* Fix — always shown */}
+            {issue.fix && (
+              <div style={{ padding: "9px 14px", background: "#FAFAFA", borderTop: `1px solid ${BORDER}` }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: TEXT }}>How to fix: </span>
+                <span style={{ fontSize: 10, color: MUTED, lineHeight: 1.6 }}>{issue.fix}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Quick Wins ────────────────────────────────────────────────────────────────
+function QuickWins({ issues }) {
+  const wins = issues
+    .filter(i => i.priority !== "High" && i.pct >= 50)
+    .sort((a, b) => issueImpactScore(b) - issueImpactScore(a))
+    .slice(0, 5);
+  if (!wins.length) return null;
+  return (
+    <ChartCard title="Quick Wins" hint="Medium/Low issues affecting more than half your pages — high ROI fixes.">
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {wins.map((issue, i) => {
+          const impact = issueImpactScore(issue);
+          const { color, bg, border } = impactGrade(impact);
+          const name = issue.name.replace(/^[^:]+:\s*/, "");
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < wins.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+              <div style={{ flexShrink: 0, background: bg, border: `1px solid ${border}`, borderRadius: 5, padding: "3px 7px", textAlign: "center", minWidth: 36 }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color, lineHeight: 1 }}>{impact}</div>
+              </div>
+              <div style={{ flex: 1, fontSize: 11, color: TEXT, lineHeight: 1.3 }}>{name}</div>
+              <span style={{ fontSize: 11, fontWeight: 700, color }}>{issue.pct.toFixed(0)}% of pages</span>
+            </div>
+          );
+        })}
+      </div>
+    </ChartCard>
+  );
+}
+
 function computeIssueStats(issues) {
   const bucket = (obj, key, val = 1) => { obj[key] = (obj[key] || 0) + val; };
 
@@ -296,30 +485,93 @@ function SectionHeader({ title, color = TEAL }) {
   );
 }
 
-function ChartCard({ title, hint, children, row }) {
+function ChartCard({ title, hint, children, row, collapsible, defaultCollapsed, summary }) {
+  const [open, setOpen] = useState(collapsible ? !defaultCollapsed : true);
   return (
-    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "14px 16px", flex: "1 1 280px", minWidth: 260 }}>
-      {title && <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{title}</div>}
-      {hint  && <div style={{ fontSize: 10, color: MUTED, marginBottom: 10, lineHeight: 1.4 }}>{hint}</div>}
-      <div style={row ? { display: "flex", alignItems: "center", gap: 14 } : {}}>{children}</div>
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "14px 16px", flex: !open ? "0 0 auto" : "1 1 280px", minWidth: 260 }}>
+      {title && (
+        <div
+          onClick={collapsible ? () => setOpen(o => !o) : undefined}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2, cursor: collapsible ? "pointer" : "default" }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, color: TEXT }}>{title}</div>
+          {collapsible && <span style={{ fontSize: 10, color: MUTED, userSelect: "none" }}>{open ? "▲" : "▼"}</span>}
+        </div>
+      )}
+      {!open && summary && <div style={{ marginTop: 10 }}>{summary}</div>}
+      {open && hint  && <div style={{ fontSize: 10, color: MUTED, marginBottom: 10, lineHeight: 1.4 }}>{hint}</div>}
+      {open && <div style={row ? { display: "flex", alignItems: "center", gap: 14 } : {}}>{children}</div>}
     </div>
   );
 }
 
-function TopInlinksTable({ rows }) {
+function InternalLinkingInsights({ orphaned, buried, topPct }) {
+  const [showAllOrphans, setShowAllOrphans] = useState(false);
+  const visibleOrphans = showAllOrphans ? orphaned : orphaned.slice(0, 8);
+
   return (
-    <ChartCard title="Top Pages by Inlinks" hint="Most internally-linked pages carry the most link equity.">
-      {rows.map((r, i) => (
-        <div key={r.url} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <div style={{ width: 18, fontSize: 10, fontWeight: 700, color: MUTED, textAlign: "right", flexShrink: 0 }}>#{i+1}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: TEXT, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || r.url}</div>
-            <div style={{ fontSize: 9, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.url}</div>
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT, flexShrink: 0, background: "#EEF2FF", borderRadius: 4, padding: "2px 7px" }}>{r.inlinks.toLocaleString()}</div>
+    <div style={{ display: "flex", gap: 10, flex: "1 1 0", minWidth: 0, flexWrap: "wrap" }}>
+      {/* Orphaned Pages */}
+      <ChartCard
+        title={`Orphaned Pages`}
+        hint="No internal links point to these pages — crawlers and users can't find them organically."
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 28, fontWeight: 900, color: orphaned.length > 0 ? "#DC2626" : "#16A34A", lineHeight: 1 }}>{orphaned.length}</div>
+          <div style={{ fontSize: 10, color: MUTED, lineHeight: 1.4 }}>pages with<br/>zero inlinks</div>
+          {topPct > 0 && (
+            <div style={{ marginLeft: "auto", textAlign: "right" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: TEXT }}>{topPct}%</div>
+              <div style={{ fontSize: 9, color: MUTED }}>of pages hold<br/>80% of links</div>
+            </div>
+          )}
         </div>
-      ))}
-    </ChartCard>
+        {orphaned.length === 0 ? (
+          <div style={{ fontSize: 11, color: "#16A34A", fontWeight: 600 }}>No orphaned pages found.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {visibleOrphans.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || r.url}</div>
+                  <div style={{ fontSize: 9, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.url}</div>
+                </div>
+                <div style={{ fontSize: 9, color: MUTED, flexShrink: 0 }}>Depth {r.depth}</div>
+              </div>
+            ))}
+            {orphaned.length > 8 && (
+              <button onClick={() => setShowAllOrphans(v => !v)} style={{ marginTop: 4, fontSize: 10, color: ACCENT, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", fontWeight: 600 }}>
+                {showAllOrphans ? "Show less" : `+${orphaned.length - 8} more orphaned pages`}
+              </button>
+            )}
+          </div>
+        )}
+      </ChartCard>
+
+      {/* Buried Pages */}
+      {buried.length > 0 && (
+        <ChartCard
+          title="Buried Pages"
+          hint="Deep pages (3+ clicks from home) with few inlinks — hard for crawlers to reach, add internal links."
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {buried.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6 }}>
+                <div style={{ flexShrink: 0, textAlign: "center", background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 4, padding: "2px 6px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#D97706" }}>D{r.depth}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || r.url}</div>
+                  <div style={{ fontSize: 9, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.url}</div>
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#D97706", flexShrink: 0, background: "#FEF3C7", borderRadius: 4, padding: "2px 6px" }}>{r.links} link{r.links !== 1 ? "s" : ""}</div>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+      )}
+    </div>
   );
 }
 
@@ -399,7 +651,7 @@ function ReplaceBtn({ label, onFile }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function CrawlReport({ crawlReport, onSave }) {
+const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDomainExtracted, onBuildStart, onBuildComplete }, ref) {
   const [crawl,     setCrawl]     = useState(crawlReport?.internal ?? null);
   const [issues,    setIssues]    = useState(crawlReport?.issues   ?? null);
   const [domain,    setDomain]    = useState(crawlReport?.domain   ?? "");
@@ -411,6 +663,9 @@ export default function CrawlReport({ crawlReport, onSave }) {
   const [errorI,    setErrorI]    = useState("");
   const [open,      setOpen]      = useState(false);
 
+  const crawlInputRef  = useRef(null);
+  const issuesInputRef = useRef(null);
+
   const persist = async (patch) => {
     if (!onSave) return;
     setSaving(true);
@@ -421,35 +676,53 @@ export default function CrawlReport({ crawlReport, onSave }) {
 
   const handleCrawlFile = (file) => {
     setLoadingC(true); setErrorC("");
+    onBuildStart?.();
     const reader = new FileReader();
     reader.onload = e => {
-      try {
-        const { col, allRows, htmlRows } = parseCrawlCSV(e.target.result);
-        const s = computeStats(allRows, htmlRows, col);
-        const dom = htmlRows[0] ? (() => { try { return new URL(htmlRows[0][0]).hostname; } catch { return ""; } })() : "";
-        const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        setCrawl(s); setDomain(dom); setCrawledAt(now); setOpen(true);
-        persist({ internal: s, domain: dom, date: now });
-      } catch (err) { setErrorC("Could not parse crawl CSV: " + err.message); }
-      finally { setLoadingC(false); }
+      const text = e.target.result;
+      setTimeout(() => {
+        try {
+          const { col, allRows, htmlRows } = parseCrawlCSV(text);
+          const s = computeStats(allRows, htmlRows, col);
+          const dom = htmlRows[0] ? (() => { try { return new URL(htmlRows[0][0]).hostname; } catch { return ""; } })() : "";
+          const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+          setCrawl(s); setDomain(dom); setCrawledAt(now);
+          persist({ internal: s, domain: dom, date: now });
+          if (dom) onDomainExtracted?.(dom);
+          onBuildComplete?.("crawl");
+        } catch (err) { setErrorC("Could not parse crawl CSV: " + err.message); onBuildComplete?.("crawl"); }
+        finally { setLoadingC(false); }
+      }, 0);
     };
     reader.readAsText(file);
   };
 
   const handleIssuesFile = (file) => {
     setLoadingI(true); setErrorI("");
+    onBuildStart?.();
     const reader = new FileReader();
     reader.onload = e => {
-      try {
-        const raw = parseIssuesCSV(e.target.result);
-        const s = computeIssueStats(raw);
-        setIssues(s); setOpen(true);
-        persist({ issues: s });
-      } catch (err) { setErrorI("Could not parse issues CSV: " + err.message); }
-      finally { setLoadingI(false); }
+      const text = e.target.result;
+      setTimeout(() => {
+        try {
+          const raw = parseIssuesCSV(text);
+          const s = computeIssueStats(raw);
+          setIssues(s);
+          persist({ issues: s });
+          onBuildComplete?.("issues");
+        } catch (err) { setErrorI("Could not parse issues CSV: " + err.message); onBuildComplete?.("issues"); }
+        finally { setLoadingI(false); }
+      }, 0);
     };
     reader.readAsText(file);
   };
+
+  useImperativeHandle(ref, () => ({
+    triggerCrawlUpload:  () => crawlInputRef.current?.click(),
+    triggerIssuesUpload: () => issuesInputRef.current?.click(),
+    processCrawlFile:    (file) => handleCrawlFile(file),
+    processIssuesFile:   (file) => handleIssuesFile(file),
+  }));
 
   const handleClear = () => {
     setCrawl(null); setIssues(null); setDomain(""); setCrawledAt("");
@@ -460,6 +733,10 @@ export default function CrawlReport({ crawlReport, onSave }) {
 
   return (
     <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 24, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+
+      {/* Hidden file inputs for external triggers */}
+      <input ref={crawlInputRef}  type="file" accept=".csv" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) handleCrawlFile(e.target.files[0]); e.target.value = ""; }} />
+      <input ref={issuesInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) handleIssuesFile(e.target.files[0]); e.target.value = ""; }} />
 
       {/* Header */}
       <div onClick={() => setOpen(v => !v)}
@@ -535,7 +812,9 @@ export default function CrawlReport({ crawlReport, onSave }) {
       )}
     </div>
   );
-}
+});
+
+export default CrawlReport;
 
 // ── Crawl Report Body ─────────────────────────────────────────────────────────
 function CrawlBody({ stats: s }) {
@@ -603,10 +882,10 @@ function CrawlBody({ stats: s }) {
       </div>
 
       <SectionHeader title="Internal Linking" color="#0E7490" />
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
         <BarChart title="Pages by Inlink Count" hint="Orphaned pages (0 inlinks) are invisible to crawlers."
           data={s.inlinks} colors={["#DC2626","#F59E0B","#22C55E","#15803D"]} />
-        <TopInlinksTable rows={s.topInlinks} />
+        <InternalLinkingInsights orphaned={s.orphanedPages ?? []} buried={s.buriedPages ?? []} topPct={s.topPct ?? 0} />
       </div>
 
       {(Object.keys(s.intent).length > 0 || Object.keys(s.sentiment).length > 0) && (
@@ -682,21 +961,88 @@ function IssuesBody({ stats: s }) {
         />
       </div>
 
-      <SectionHeader title="♿ Accessibility Issues" color="#7C3AED" />
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-        {s.accessibilityIssues.length > 0 ? (
-          <IssueListCard
-            title="Accessibility Checks (axe-core)"
-            hint="Click any row to see the recommended fix. Sorted by pages affected."
-            issues={s.accessibilityIssues}
-            showFix
-          />
-        ) : (
-          <ChartCard title="Accessibility" hint="No accessibility issues detected in this export.">
-            <div style={{ textAlign: "center", padding: "16px 0", color: "#16A34A", fontSize: 13, fontWeight: 600 }}>✓ No accessibility issues found</div>
-          </ChartCard>
-        )}
-      </div>
+      <SectionHeader title="♿ Accessibility" color="#7C3AED" />
+      {s.accessibilityIssues.length > 0 ? (() => {
+        const healthScore = a11yHealthScore(s.accessibilityIssues);
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Score + summary row */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "stretch" }}>
+              <ChartCard title="Health Score" hint="Weighted score based on issue priority × % of pages affected. High issues on all pages penalise heavily.">
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "8px 0" }}>
+                  <A11yGauge score={healthScore} />
+                  <div style={{ marginTop: 14, display: "flex", gap: 16, justifyContent: "center" }}>
+                    {[
+                      { label: "High",   val: s.accessibilityIssues.filter(i => i.priority === "High").length,   color: "#DC2626" },
+                      { label: "Medium", val: s.accessibilityIssues.filter(i => i.priority === "Medium").length, color: "#D97706" },
+                      { label: "Low",    val: s.accessibilityIssues.filter(i => i.priority === "Low").length,    color: "#16A34A" },
+                    ].map(({ label, val, color }) => val > 0 && (
+                      <div key={label} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color }}>{val}</div>
+                        <div style={{ fontSize: 9, color: MUTED, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </ChartCard>
+              <QuickWins issues={s.accessibilityIssues} />
+            </div>
+            {/* Issue impact cards */}
+            <ChartCard
+              title="Issue Impact Scores"
+              hint="Each issue scored 0–100 based on priority weight × % of pages affected."
+              collapsible
+              defaultCollapsed
+              summary={(() => {
+                const sorted = [...s.accessibilityIssues].sort((a, b) => issueImpactScore(b) - issueImpactScore(a));
+                const counts = { Critical: 0, Severe: 0, Moderate: 0, Minor: 0, Minimal: 0 };
+                sorted.forEach(i => { const g = impactGrade(issueImpactScore(i)); counts[g.label]++; });
+                const severityColors = { Critical: "#DC2626", Severe: "#EA580C", Moderate: "#D97706", Minor: "#2563EB", Minimal: "#6B7280" };
+                const severityBg    = { Critical: "#FEF2F2", Severe: "#FFF7ED", Moderate: "#FFFBEB", Minor: "#EFF6FF", Minimal: "#F9FAFB" };
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {/* Severity count pills */}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {Object.entries(counts).filter(([, v]) => v > 0).map(([label, count]) => (
+                        <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, background: severityBg[label], border: `1px solid ${severityColors[label]}33`, borderRadius: 6, padding: "5px 10px" }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: severityColors[label], flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, fontWeight: 800, color: severityColors[label] }}>{count}</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: severityColors[label] }}>{label}</span>
+                        </div>
+                      ))}
+                      <div style={{ marginLeft: "auto", fontSize: 10, color: MUTED, alignSelf: "center" }}>{sorted.length} issues total · click ▲ to expand</div>
+                    </div>
+                    {/* Top 3 issues preview */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {sorted.slice(0, 3).map((issue, i) => {
+                        const impact = issueImpactScore(issue);
+                        const { label: sevLabel, color, bg, border } = impactGrade(impact);
+                        const name = issue.name.replace(/^[^:]+:\s*/, "");
+                        return (
+                          <div key={i} style={{ flex: 1, background: bg, border: `1px solid ${border}`, borderLeft: `3px solid ${color}`, borderRadius: 6, padding: "8px 10px", minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                              <span style={{ fontSize: 16, fontWeight: 900, color, lineHeight: 1 }}>{impact}</span>
+                              <span style={{ fontSize: 8, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.6 }}>{sevLabel}</span>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: TEXT, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{name}</div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color, marginTop: 4 }}>{issue.pct.toFixed(0)}% of pages</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            >
+              <A11yIssueGrid issues={s.accessibilityIssues} />
+            </ChartCard>
+          </div>
+        );
+      })() : (
+        <ChartCard title="Accessibility" hint="No accessibility issues detected in this export.">
+          <div style={{ textAlign: "center", padding: "16px 0", color: "#16A34A", fontSize: 13, fontWeight: 600 }}>✓ No accessibility issues found</div>
+        </ChartCard>
+      )}
 
       <SectionHeader title="Top High Priority Issues" color="#DC2626" />
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>

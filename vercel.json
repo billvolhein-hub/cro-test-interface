@@ -3,7 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/screenshot.js": { "memory": 1024, "maxDuration": 45 }
+    "api/screenshot.js": { "memory": 1024, "maxDuration": 45 },
+    "api/ahrefs.js":     { "maxDuration": 15 }
   },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }

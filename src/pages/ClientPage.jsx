@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
 import { usePortal } from "../context/PortalContext";
@@ -6,6 +6,8 @@ import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import CrawlReport from "../components/CrawlReport";
+import AhrefsReport from "../components/AhrefsReport";
+import ReportBuilderModal from "../components/ReportBuilderModal";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { regeneratePortalToken } from "../lib/api";
 import { exportTestingCalendar } from "../lib/exportCalendar";
@@ -42,6 +44,22 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
 
   const brand = mergeBrand(client?.brand);
 
+  const [pendingDomain,      setPendingDomain]      = useState("");
+  const [engagementOpen,     setEngagementOpen]     = useState(false);
+  const [modalOpen,          setModalOpen]          = useState(false);
+  const [crawlDone,          setCrawlDone]          = useState(false);
+  const [issuesDone,         setIssuesDone]         = useState(false);
+  const [ahrefsDone,         setAhrefsDone]         = useState(false);
+  const crawlRef   = useRef(null);
+  const ahrefsRef  = useRef(null);
+  const modalRef   = useRef(null);
+
+  // Trigger Ahrefs fetch only once BOTH Screaming Frog files are done
+  useEffect(() => {
+    if (crawlDone && issuesDone && pendingDomain && !ahrefsDone) {
+      ahrefsRef.current?.triggerFetch(pendingDomain);
+    }
+  }, [crawlDone, issuesDone, pendingDomain, ahrefsDone]);
   const [editing,        setEditing]        = useState(false);
   const [draft,          setDraft]          = useState(brand);
   const [saving,         setSaving]         = useState(false);
@@ -408,92 +426,150 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           </div>
         )}
 
-        {/* ── Share portal link (admin only) ── */}
+        {/* ── Engagement Overview (admin only, collapsible) ── */}
         {!isPortal && (
-          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Client Portal Link</div>
-              <div style={{ fontSize: 12, color: MUTED, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {portalUrl}
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 20, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+            <div
+              onClick={() => setEngagementOpen(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", cursor: "pointer", background: "#F8FAFC", borderBottom: engagementOpen ? `1px solid ${BORDER}` : "none" }}
+            >
+              <div style={{ width: 20, height: 20, borderRadius: 6, background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                  <rect x="1.5" y="3" width="9" height="6.5" rx="1" stroke="#fff" strokeWidth="1.3"/>
+                  <path d="M4 3V2a2 2 0 0 1 4 0v1" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
               </div>
+              <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: 0.5 }}>Engagement Overview</div>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: engagementOpen ? "none" : "rotate(-90deg)", transition: "transform .2s", color: MUTED }}>
+                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            <button
-              onClick={handleRegenerateToken}
-              disabled={tokenRegen}
-              title="Invalidate current link and generate a new one"
-              style={{ flexShrink: 0, background: "none", color: MUTED, border: `1px solid ${BORDER}`, padding: "8px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: tokenRegen ? "wait" : "pointer" }}>
-              {tokenRegen ? "…" : "↺ Reset"}
-            </button>
-            <button
-              onClick={() => navigator.clipboard.writeText(portalUrl)}
-              style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              Copy Link
-            </button>
-          </div>
-        )}
+            {engagementOpen && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, padding: "16px 18px" }}>
 
-        {/* ── Portal Password (admin only) ── */}
-        {!isPortal && (
-          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>Portal Password</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, position: "relative" }}>
-                <input
-                  type={pwVisible ? "text" : "password"}
-                  value={pwDraft !== "" ? pwDraft : (client.portalPassword ?? "")}
-                  onChange={e => setPwDraft(e.target.value)}
-                  placeholder={client.portalPassword ? "••••••••" : "No password set — portal is open"}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 36px 8px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
-                />
-                <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 12, padding: 0 }}>
-                  {pwVisible ? "Hide" : "Show"}
-                </button>
-              </div>
-              <button
-                disabled={pwSaving}
-                onClick={async () => {
-                  setPwSaving(true);
-                  await onUpdatePortalPassword?.(clientId, pwDraft);
-                  setPwDraft("");
-                  setPwSaving(false);
-                }}
-                style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: pwSaving ? "wait" : "pointer", opacity: pwSaving ? 0.7 : 1 }}>
-                {pwSaving ? "Saving…" : "Save"}
-              </button>
-              {client.portalPassword && (
+            {/* Portal Link */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Client Portal Link</div>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
-                  onClick={async () => { await onUpdatePortalPassword?.(clientId, ""); setPwDraft(""); }}
-                  style={{ flexShrink: 0, background: "none", color: "#DC2626", border: "1px solid #FECACA", padding: "8px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  Remove
+                  onClick={handleRegenerateToken}
+                  disabled={tokenRegen}
+                  title="Invalidate current link and generate a new one"
+                  style={{ flex: 1, background: "none", color: MUTED, border: `1px solid ${BORDER}`, padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: tokenRegen ? "wait" : "pointer" }}>
+                  {tokenRegen ? "…" : "↺ Reset"}
                 </button>
-              )}
+                <button
+                  onClick={() => navigator.clipboard.writeText(portalUrl)}
+                  style={{ flex: 1, background: ACCENT, color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Copy Link
+                </button>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>
-              {client.portalPassword ? "Clients must enter this password to view the portal." : "Set a password to restrict portal access."}
+
+            {/* Portal Password */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Portal Password</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ flex: 1, position: "relative" }}>
+                  <input
+                    type={pwVisible ? "text" : "password"}
+                    value={pwDraft !== "" ? pwDraft : (client.portalPassword ?? "")}
+                    onChange={e => setPwDraft(e.target.value)}
+                    placeholder={client.portalPassword ? "••••••••" : "No password"}
+                    style={{ width: "100%", boxSizing: "border-box", padding: "7px 36px 7px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
+                  />
+                  <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 11, padding: 0 }}>
+                    {pwVisible ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <button
+                  disabled={pwSaving}
+                  onClick={async () => { setPwSaving(true); await onUpdatePortalPassword?.(clientId, pwDraft); setPwDraft(""); setPwSaving(false); }}
+                  style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "7px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: pwSaving ? "wait" : "pointer", opacity: pwSaving ? 0.7 : 1 }}>
+                  {pwSaving ? "…" : "Save"}
+                </button>
+                {client.portalPassword && (
+                  <button
+                    onClick={async () => { await onUpdatePortalPassword?.(clientId, ""); setPwDraft(""); }}
+                    style={{ flexShrink: 0, background: "none", color: "#DC2626", border: "1px solid #FECACA", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Testing Calendar Export */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Testing Calendar Export</div>
+              <button
+                onClick={() => exportTestingCalendar(client.name, clientTests, brand)}
+                style={{ background: "#15803D", color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                ↓ Export .xlsx
+              </button>
+            </div>
+
+          </div>
+            )}
           </div>
         )}
 
-        {/* ── Export Testing Calendar (admin only) ── */}
+        {/* ── Build Report button ── */}
         {!isPortal && (
-          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 }}>Testing Calendar Export</div>
-              <div style={{ fontSize: 12, color: MUTED }}>Downloads an Excel file with Test Ideation and Testing Calendar tabs</div>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
             <button
-              onClick={() => exportTestingCalendar(client.name, clientTests, brand)}
-              style={{ flexShrink: 0, background: "#15803D", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              ↓ Export .xlsx
+              onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setPendingDomain(""); setModalOpen(true); }}
+              style={{ background: ACCENT, color: "#fff", border: "none", borderRadius: 8, padding: "11px 24px", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+              ⚡ Build Site Report
             </button>
+            {(crawlDone || issuesDone || ahrefsDone) && (
+              <div style={{ display: "flex", gap: 8 }}>
+                {crawlDone  && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,   background: "#CCFBF1", border: "1px solid #99F6E4", borderRadius: 5, padding: "4px 10px" }}>SEO Internal ✓</span>}
+                {issuesDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #C4B5FD", borderRadius: 5, padding: "4px 10px" }}>SEO Issues ✓</span>}
+                {ahrefsDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#DBEAFE", border: "1px solid #BFDBFE", borderRadius: 5, padding: "4px 10px" }}>Backlinks ✓</span>}
+              </div>
+            )}
           </div>
+        )}
+
+        {/* ── Report Builder Modal ── */}
+        {!isPortal && (
+          <ReportBuilderModal
+            ref={modalRef}
+            isOpen={modalOpen}
+            onClose={() => setModalOpen(false)}
+            crawlRef={crawlRef}
+            savedDomain={client.crawlReport?.domain ?? ""}
+            crawlDone={crawlDone}
+            issuesDone={issuesDone}
+            ahrefsDone={ahrefsDone}
+          />
+        )}
+
+        {/* ── Backlink Intelligence ── */}
+        {!isPortal && (
+          <AhrefsReport
+            ref={ahrefsRef}
+            defaultDomain={client.crawlReport?.domain ?? ""}
+            onFetchComplete={() => setAhrefsDone(true)}
+          />
         )}
 
         {/* ── SEO Report ── */}
         <CrawlReport
+          ref={crawlRef}
           clientId={clientId}
           crawlReport={client.crawlReport}
           onSave={(report) => onSaveCrawlReport?.(clientId, report)}
+          onDomainExtracted={(domain) => { setPendingDomain(domain); }}
+          onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
+        />
+
+        {/* ── Client Notes ── */}
+        <ClientNotesFeed
+          tests={clientTests}
+          clients={[client]}
+          clientId={clientId}
+          onUpdateTest={onUpdateTest}
         />
 
         {/* ── Pipeline overview ── */}
@@ -513,15 +589,6 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
             ))}
           </div>
         </div>
-
-        {/* ── Tests grouped by stage ── */}
-        {/* Client Notes feed */}
-        <ClientNotesFeed
-          tests={clientTests}
-          clients={[client]}
-          clientId={clientId}
-          onUpdateTest={onUpdateTest}
-        />
 
         {/* Tests grouped by stage — display order: Live, In Work, Backlog, Complete */}
         {clientTests.length === 0 ? (

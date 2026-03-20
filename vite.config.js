@@ -49,10 +49,41 @@ function screenshotPlugin() {
   };
 }
 
+function ahrefsPlugin(env) {
+  return {
+    name: "ahrefs-api",
+    configureServer(server) {
+      server.middlewares.use("/api/ahrefs", async (req, res) => {
+        const params = Object.fromEntries(new URL(req.url, "http://localhost").searchParams);
+        const { endpoint, ...rest } = params;
+        const key = env.AHREFS_API_KEY;
+
+        res.setHeader("Content-Type", "application/json");
+
+        if (!endpoint) { res.statusCode = 400; res.end(JSON.stringify({ error: "endpoint required" })); return; }
+        if (!key)      { res.statusCode = 500; res.end(JSON.stringify({ error: "AHREFS_API_KEY not set in .env" })); return; }
+
+        const qs  = new URLSearchParams(rest).toString();
+        const url = `https://api.ahrefs.com/v3/site-explorer/${endpoint}${qs ? "?" + qs : ""}`;
+
+        try {
+          const r    = await fetch(url, { headers: { Authorization: `Bearer ${key}`, Accept: "application/json" } });
+          const data = await r.json();
+          res.statusCode = r.status;
+          res.end(JSON.stringify(data));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
-    plugins: [react(), screenshotPlugin()],
+    plugins: [react(), screenshotPlugin(), ahrefsPlugin(env)],
     server: {
       proxy: {
         "/api/anthropic": {
