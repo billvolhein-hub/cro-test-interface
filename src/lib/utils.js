@@ -441,7 +441,9 @@ export async function fetchConvertResults(experienceId) {
 
   if (!reportRes.ok) {
     const err = await reportRes.json().catch(() => ({}));
-    throw new Error(err?.message ?? err?.error ?? `Convert API ${reportRes.status}`);
+    const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
+    const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
+    throw Object.assign(new Error(msg), { raw: err });
   }
 
   const raw = await reportRes.json();
