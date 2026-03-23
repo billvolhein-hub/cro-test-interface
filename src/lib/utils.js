@@ -399,81 +399,27 @@ function parseConvertReport(reportData, goalNames, variationsData, experienceId)
 }
 
 export async function fetchConvertResults(experienceId) {
-  const accountId = import.meta.env.VITE_CONVERT_ACCOUNT_ID;
-  const projectId = import.meta.env.VITE_CONVERT_PROJECT_ID;
+  const res = await fetch(`/api/convert-sync?experienceId=${encodeURIComponent(experienceId)}`);
+  const payload = await res.json().catch(() => ({}));
 
-  if (!accountId || !projectId)
-    throw new Error("Add VITE_CONVERT_ACCOUNT_ID and VITE_CONVERT_PROJECT_ID to your .env file.");
-
-  const acctPath    = `api/v2/accounts/${accountId}`;
-  const projectPath = `${acctPath}/projects/${projectId}`;
-
-  // ── 1. Fetch aggregated report — try project-scoped first, fall back to account-scoped ──
-  let goalNames = {};
-  let reportRes = await convertFetch(
-    `${projectPath}/experiences/${experienceId}/aggregated_report`,
-    { method: "POST", body: JSON.stringify({}) }
-  );
-
-  if (reportRes.status === 404) {
-    reportRes = await convertFetch(
-      `${acctPath}/experiences/${experienceId}/aggregated_report`,
-      { method: "POST", body: JSON.stringify({}) }
-    );
-  }
-
-  if (!reportRes.ok) {
-    const err = await reportRes.json().catch(() => ({}));
+  if (!res.ok) {
     const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
-    const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
-    throw Object.assign(new Error(msg), { raw: err });
+    const msg = extractMsg(payload?.error) ?? `Convert API ${res.status}`;
+    throw Object.assign(new Error(msg), { raw: payload });
   }
 
-  const raw   = await reportRes.json();
-  const inner = raw?.data ?? raw;
+  const { inner, goalNames = {}, startDate = "", endDate = "" } = payload;
 
   if (!inner?.reportData || !inner?.variations_data) {
     throw Object.assign(
       new Error("Unexpected response shape — could not find goal/variant data."),
-      { raw }
+      { raw: payload }
     );
   }
-
-  // ── 2. Fetch goal names ────────────────────────────────────────────────────
-  const goalIds = [...new Set(inner.reportData.map(r => String(r.goal_id)))];
-  await Promise.all(goalIds.map(async (gid) => {
-    try {
-      const gRes = await convertFetch(`${projectPath}/goals/${gid}`);
-      if (gRes.ok) {
-        const gd   = await gRes.json();
-        const g    = gd?.data ?? gd;
-        const name = g?.name ?? g?.label ?? g?.title;
-        if (name) goalNames[gid] = name;
-      }
-    } catch { /* non-fatal */ }
-  }));
 
   const { variantOrder, goals } = parseConvertReport(
     inner.reportData, goalNames, inner.variations_data, experienceId
   );
-
-  // ── 3. Fetch experience details for start/end dates ───────────────────────
-  const fmtApiDate = (val) => {
-    if (!val) return "";
-    const d = new Date(typeof val === "number" ? val * 1000 : val);
-    return isNaN(d) ? "" : d.toISOString().slice(0, 10);
-  };
-
-  let startDate = "", endDate = "";
-  try {
-    let expRes = await convertFetch(`${projectPath}/experiences/${experienceId}`);
-    if (!expRes.ok) expRes = await convertFetch(`${acctPath}/experiences/${experienceId}`);
-    if (expRes.ok) {
-      const expData = (await expRes.json())?.data ?? {};
-      startDate = fmtApiDate(expData?.start_time);
-      endDate   = fmtApiDate(expData?.end_time);
-    }
-  } catch { /* non-fatal */ }
 
   return {
     convertExperienceId: String(experienceId),
