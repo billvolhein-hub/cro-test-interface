@@ -348,27 +348,13 @@ Rules:
 
 // ── Convert.com API ───────────────────────────────────────────────────────────
 
-async function hmacSha256Hex(secret, message) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function convertHeaders(appId, appSecret, targetUrl, body) {
-  const expires = Math.floor(Date.now() / 1000) + 300; // 5 min window
-  const bodyStr = body ? JSON.stringify(body) : "";
-  const signString = [appId, expires, targetUrl, bodyStr].join("\n");
-  const signature = await hmacSha256Hex(appSecret, signString);
-  return {
-    "Convert-Application-ID": appId,
-    "Expires": String(expires),
-    "Authorization": `Convert-HMAC-SHA256 Signature=${signature}`,
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-  };
+// Convert API calls go through the server-side proxy which handles HMAC auth
+async function convertFetch(path, options = {}) {
+  const res = await fetch(`/api/convert/${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", "Accept": "application/json", ...(options.headers || {}) },
+  });
+  return res;
 }
 
 function parseConvertReport(reportData, goalNames, variationsData, experienceId) {
@@ -413,44 +399,26 @@ function parseConvertReport(reportData, goalNames, variationsData, experienceId)
 }
 
 export async function fetchConvertResults(experienceId) {
-  const appId     = import.meta.env.VITE_CONVERT_API_KEY;
-  const appSecret = import.meta.env.VITE_CONVERT_API_SECRET;
   const accountId = import.meta.env.VITE_CONVERT_ACCOUNT_ID;
   const projectId = import.meta.env.VITE_CONVERT_PROJECT_ID;
 
-  if (!appId || !appSecret)
-    throw new Error("Add VITE_CONVERT_API_KEY and VITE_CONVERT_API_SECRET to your .env file.");
   if (!accountId || !projectId)
     throw new Error("Add VITE_CONVERT_ACCOUNT_ID and VITE_CONVERT_PROJECT_ID to your .env file.");
 
-  const accountBase      = `https://api.convert.com/api/v2/accounts/${accountId}`;
-  const accountProxyBase = `/api/convert/api/v2/accounts/${accountId}`;
-  const base      = `${accountBase}/projects/${projectId}`;
-  const proxyBase = `${accountProxyBase}/projects/${projectId}`;
+  const acctPath    = `api/v2/accounts/${accountId}`;
+  const projectPath = `${acctPath}/projects/${projectId}`;
 
-  // ── 1. Fetch goal names from the experience (most reliable) + project goals fallback ──
+  // ── 1. Fetch aggregated report — try project-scoped first, fall back to account-scoped ──
   let goalNames = {};
-
-  // ── 2. Fetch aggregated report — try project-scoped first, fall back to account-scoped ──
-  const reportBody = {};
-  let reportRes;
-  let attemptedUrl;
-
-  // Try project-scoped URL first
-  attemptedUrl = `${base}/experiences/${experienceId}/aggregated_report`;
-  let reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
-  reportRes = await fetch(
-    `${proxyBase}/experiences/${experienceId}/aggregated_report`,
-    { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
+  let reportRes = await convertFetch(
+    `${projectPath}/experiences/${experienceId}/aggregated_report`,
+    { method: "POST", body: JSON.stringify({}) }
   );
 
-  // If 404, fall back to account-scoped URL (experiment may be in a different project)
   if (reportRes.status === 404) {
-    attemptedUrl = `${accountBase}/experiences/${experienceId}/aggregated_report`;
-    reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
-    reportRes = await fetch(
-      `${accountProxyBase}/experiences/${experienceId}/aggregated_report`,
-      { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
+    reportRes = await convertFetch(
+      `${acctPath}/experiences/${experienceId}/aggregated_report`,
+      { method: "POST", body: JSON.stringify({}) }
     );
   }
 
@@ -458,17 +426,10 @@ export async function fetchConvertResults(experienceId) {
     const err = await reportRes.json().catch(() => ({}));
     const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
     const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
-    // Fetch project list to help identify the correct project ID
-    let projects = null;
-    try {
-      const pHeaders = await convertHeaders(appId, appSecret, `${accountBase}/projects`, null);
-      const pRes = await fetch(`${accountProxyBase}/projects`, { headers: pHeaders });
-      if (pRes.ok) projects = (await pRes.json())?.data ?? await pRes.json().catch(() => null);
-    } catch { /* non-fatal */ }
-    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl, _available_projects: projects, _env: { hasApiKey: !!appId, apiKeyPrefix: appId?.slice(0,8), hasSecret: !!appSecret, accountId, projectId } } });
+    throw Object.assign(new Error(msg), { raw: err });
   }
 
-  const raw = await reportRes.json();
+  const raw   = await reportRes.json();
   const inner = raw?.data ?? raw;
 
   if (!inner?.reportData || !inner?.variations_data) {
@@ -478,16 +439,14 @@ export async function fetchConvertResults(experienceId) {
     );
   }
 
-  // ── 3. Fetch each goal by ID to resolve names ─────────────────────────────
+  // ── 2. Fetch goal names ────────────────────────────────────────────────────
   const goalIds = [...new Set(inner.reportData.map(r => String(r.goal_id)))];
   await Promise.all(goalIds.map(async (gid) => {
     try {
-      const gTarget = `${base}/goals/${gid}`;
-      const gHeaders = await convertHeaders(appId, appSecret, gTarget, null);
-      const gRes = await fetch(`${proxyBase}/goals/${gid}`, { headers: gHeaders });
+      const gRes = await convertFetch(`${projectPath}/goals/${gid}`);
       if (gRes.ok) {
-        const gd = await gRes.json();
-        const g = gd?.data ?? gd;
+        const gd   = await gRes.json();
+        const g    = gd?.data ?? gd;
         const name = g?.name ?? g?.label ?? g?.title;
         if (name) goalNames[gid] = name;
       }
@@ -498,7 +457,7 @@ export async function fetchConvertResults(experienceId) {
     inner.reportData, goalNames, inner.variations_data, experienceId
   );
 
-  // ── 4. Fetch experience details for start/end dates ───────────────────────
+  // ── 3. Fetch experience details for start/end dates ───────────────────────
   const fmtApiDate = (val) => {
     if (!val) return "";
     const d = new Date(typeof val === "number" ? val * 1000 : val);
@@ -507,20 +466,14 @@ export async function fetchConvertResults(experienceId) {
 
   let startDate = "", endDate = "";
   try {
-    let expRes;
-    let expHeaders = await convertHeaders(appId, appSecret, `${base}/experiences/${experienceId}`, null);
-    expRes = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
-    if (expRes.status === 404) {
-      expHeaders = await convertHeaders(appId, appSecret, `${accountBase}/experiences/${experienceId}`, null);
-      expRes = await fetch(`${accountProxyBase}/experiences/${experienceId}`, { headers: expHeaders });
-    }
+    let expRes = await convertFetch(`${projectPath}/experiences/${experienceId}`);
+    if (!expRes.ok) expRes = await convertFetch(`${acctPath}/experiences/${experienceId}`);
     if (expRes.ok) {
-      const expRaw  = await expRes.json();
-      const expData = expRaw?.data ?? expRaw;
+      const expData = (await expRes.json())?.data ?? {};
       startDate = fmtApiDate(expData?.start_time);
       endDate   = fmtApiDate(expData?.end_time);
     }
-  } catch { /* non-fatal — badges just won't show */ }
+  } catch { /* non-fatal */ }
 
   return {
     convertExperienceId: String(experienceId),
