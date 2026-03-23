@@ -437,19 +437,19 @@ export async function fetchConvertResults(experienceId) {
   let attemptedUrl;
 
   // Try project-scoped URL first
-  attemptedUrl = `${base}/experiments/${experienceId}/aggregated_report`;
+  attemptedUrl = `${base}/experiences/${experienceId}/aggregated_report`;
   let reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
   reportRes = await fetch(
-    `${proxyBase}/experiments/${experienceId}/aggregated_report`,
+    `${proxyBase}/experiences/${experienceId}/aggregated_report`,
     { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
   );
 
   // If 404, fall back to account-scoped URL (experiment may be in a different project)
   if (reportRes.status === 404) {
-    attemptedUrl = `${accountBase}/experiments/${experienceId}/aggregated_report`;
+    attemptedUrl = `${accountBase}/experiences/${experienceId}/aggregated_report`;
     reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
     reportRes = await fetch(
-      `${accountProxyBase}/experiments/${experienceId}/aggregated_report`,
+      `${accountProxyBase}/experiences/${experienceId}/aggregated_report`,
       { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
     );
   }
@@ -458,7 +458,14 @@ export async function fetchConvertResults(experienceId) {
     const err = await reportRes.json().catch(() => ({}));
     const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
     const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
-    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl } });
+    // Fetch project list to help identify the correct project ID
+    let projects = null;
+    try {
+      const pHeaders = await convertHeaders(appId, appSecret, `${accountBase}/projects`, null);
+      const pRes = await fetch(`${accountProxyBase}/projects`, { headers: pHeaders });
+      if (pRes.ok) projects = (await pRes.json())?.data ?? await pRes.json().catch(() => null);
+    } catch { /* non-fatal */ }
+    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl, _available_projects: projects } });
   }
 
   const raw = await reportRes.json();
@@ -501,11 +508,11 @@ export async function fetchConvertResults(experienceId) {
   let startDate = "", endDate = "";
   try {
     let expRes;
-    let expHeaders = await convertHeaders(appId, appSecret, `${base}/experiments/${experienceId}`, null);
-    expRes = await fetch(`${proxyBase}/experiments/${experienceId}`, { headers: expHeaders });
+    let expHeaders = await convertHeaders(appId, appSecret, `${base}/experiences/${experienceId}`, null);
+    expRes = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
     if (expRes.status === 404) {
-      expHeaders = await convertHeaders(appId, appSecret, `${accountBase}/experiments/${experienceId}`, null);
-      expRes = await fetch(`${accountProxyBase}/experiments/${experienceId}`, { headers: expHeaders });
+      expHeaders = await convertHeaders(appId, appSecret, `${accountBase}/experiences/${experienceId}`, null);
+      expRes = await fetch(`${accountProxyBase}/experiences/${experienceId}`, { headers: expHeaders });
     }
     if (expRes.ok) {
       const expRaw  = await expRes.json();
