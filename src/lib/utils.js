@@ -443,7 +443,7 @@ export async function fetchConvertResults(experienceId) {
     const err = await reportRes.json().catch(() => ({}));
     const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
     const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
-    throw Object.assign(new Error(msg), { raw: err });
+    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: `${base}/experiments/${experienceId}/aggregated_report` } });
   }
 
   const raw = await reportRes.json();
