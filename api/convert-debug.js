@@ -5,8 +5,15 @@ export default async function handler(req, res) {
   const appSecret = process.env.CONVERT_API_SECRET;
   const accountId = process.env.VITE_CONVERT_ACCOUNT_ID ?? req.query.accountId;
 
+  const allConvertKeys = Object.keys(process.env).filter(k => k.toLowerCase().includes("convert"));
+
   if (!appId || !appSecret) {
-    return res.status(500).json({ error: "Missing CONVERT_API_KEY or CONVERT_API_SECRET" });
+    return res.status(500).json({
+      error: "Missing CONVERT_API_KEY or CONVERT_API_SECRET",
+      convert_keys_visible: allConvertKeys,
+      CONVERT_API_KEY: process.env.CONVERT_API_KEY ?? "UNDEFINED",
+      CONVERT_API_SECRET: process.env.CONVERT_API_SECRET ? "SET" : "UNDEFINED",
+    });
   }
 
   const results = {};
