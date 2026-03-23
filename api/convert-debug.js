@@ -1,8 +1,8 @@
 import crypto from "crypto";
 
 export default async function handler(req, res) {
-  const appId     = process.env.CONVERT_API_KEY;
-  const appSecret = process.env.CONVERT_API_SECRET;
+  const appId     = process.env.CONVERT_API_KEY     ?? process.env.VITE_CONVERT_API_KEY;
+  const appSecret = process.env.CONVERT_API_SECRET  ?? process.env.VITE_CONVERT_API_SECRET;
   const accountId = process.env.VITE_CONVERT_ACCOUNT_ID ?? req.query.accountId;
 
   const allConvertKeys = Object.keys(process.env).filter(k => k.toLowerCase().includes("convert"));

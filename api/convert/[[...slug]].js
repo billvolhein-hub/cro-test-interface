@@ -9,8 +9,8 @@ function hmacSha256Hex(secret, message) {
 }
 
 export default async function handler(req, res) {
-  const appId     = process.env.CONVERT_API_KEY;
-  const appSecret = process.env.CONVERT_API_SECRET;
+  const appId     = process.env.CONVERT_API_KEY     ?? process.env.VITE_CONVERT_API_KEY;
+  const appSecret = process.env.CONVERT_API_SECRET  ?? process.env.VITE_CONVERT_API_SECRET;
 
   if (!appId || !appSecret) {
     return res.status(500).json({ error: "Missing CONVERT_API_KEY or CONVERT_API_SECRET on server" });
