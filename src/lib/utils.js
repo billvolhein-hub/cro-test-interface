@@ -430,12 +430,12 @@ export async function fetchConvertResults(experienceId) {
   let goalNames = {};
 
   // ── 2. Fetch aggregated report ────────────────────────────────────────────
-  const reportTarget = `${base}/experiences/${experienceId}/aggregated_report`;
+  const reportTarget = `${base}/experiments/${experienceId}/aggregated_report`;
   const reportBody   = {};
   const reportHeaders = await convertHeaders(appId, appSecret, reportTarget, reportBody);
 
   const reportRes = await fetch(
-    `${proxyBase}/experiences/${experienceId}/aggregated_report`,
+    `${proxyBase}/experiments/${experienceId}/aggregated_report`,
     { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
   );
 
@@ -485,9 +485,9 @@ export async function fetchConvertResults(experienceId) {
 
   let startDate = "", endDate = "";
   try {
-    const expTarget  = `${base}/experiences/${experienceId}`;
+    const expTarget  = `${base}/experiments/${experienceId}`;
     const expHeaders = await convertHeaders(appId, appSecret, expTarget, null);
-    const expRes     = await fetch(`${proxyBase}/experiences/${experienceId}`, { headers: expHeaders });
+    const expRes     = await fetch(`${proxyBase}/experiments/${experienceId}`, { headers: expHeaders });
     if (expRes.ok) {
       const expRaw  = await expRes.json();
       const expData = expRaw?.data ?? expRaw;
