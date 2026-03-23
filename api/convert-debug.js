@@ -18,30 +18,41 @@ export default async function handler(req, res) {
 
   const results = {};
 
-  // Test a sequence of URLs to find where things break
-  const testUrls = [
-    `https://api.convert.com/api/v2/accounts/${accountId}`,
-    `https://api.convert.com/api/v2/accounts/${accountId}/projects`,
+  const projectId = process.env.VITE_CONVERT_PROJECT_ID;
+  const expId     = req.query.expId || "100136426";
+
+  const tests = [
+    { method: "GET",  url: `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}/experiences`, body: null },
+    { method: "POST", url: `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}/experiences/${expId}/aggregated_report`, body: {} },
+    { method: "GET",  url: `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}/experiences/${expId}`, body: null },
   ];
 
-  for (const url of testUrls) {
+  for (const t of tests) {
+    const bodyStr    = t.body != null ? JSON.stringify(t.body) : "";
     const expires    = Math.floor(Date.now() / 1000) + 300;
-    const signString = [appId, expires, url, ""].join("\n");
+    const signString = [appId, expires, t.url, bodyStr].join("\n");
     const signature  = crypto.createHmac("sha256", appSecret).update(signString).digest("hex");
 
     try {
-      const r = await fetch(url, {
+      const fetchOpts = {
+        method:  t.method,
         headers: {
           "Convert-Application-ID": appId,
           "Expires":                String(expires),
           "Authorization":          `Convert-HMAC-SHA256 Signature=${signature}`,
+          "Content-Type":           "application/json",
           "Accept":                 "application/json",
         },
-      });
-      const body = await r.json().catch(() => null);
-      results[url] = { status: r.status, body };
+      };
+      if (bodyStr) fetchOpts.body = bodyStr;
+
+      const r    = await fetch(t.url, fetchOpts);
+      const text = await r.text();
+      let body;
+      try { body = JSON.parse(text); } catch { body = text.slice(0, 300); }
+      results[`${t.method} ${t.url}`] = { status: r.status, body };
     } catch (e) {
-      results[url] = { error: e.message };
+      results[`${t.method} ${t.url}`] = { error: e.message };
     }
   }
 
