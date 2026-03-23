@@ -465,7 +465,7 @@ export async function fetchConvertResults(experienceId) {
       const pRes = await fetch(`${accountProxyBase}/projects`, { headers: pHeaders });
       if (pRes.ok) projects = (await pRes.json())?.data ?? await pRes.json().catch(() => null);
     } catch { /* non-fatal */ }
-    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl, _available_projects: projects } });
+    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl, _available_projects: projects, _env: { hasApiKey: !!appId, apiKeyPrefix: appId?.slice(0,8), hasSecret: !!appSecret, accountId, projectId } } });
   }
 
   const raw = await reportRes.json();
