@@ -423,27 +423,42 @@ export async function fetchConvertResults(experienceId) {
   if (!accountId || !projectId)
     throw new Error("Add VITE_CONVERT_ACCOUNT_ID and VITE_CONVERT_PROJECT_ID to your .env file.");
 
-  const base = `https://api.convert.com/api/v2/accounts/${accountId}/projects/${projectId}`;
-  const proxyBase = `/api/convert/api/v2/accounts/${accountId}/projects/${projectId}`;
+  const accountBase      = `https://api.convert.com/api/v2/accounts/${accountId}`;
+  const accountProxyBase = `/api/convert/api/v2/accounts/${accountId}`;
+  const base      = `${accountBase}/projects/${projectId}`;
+  const proxyBase = `${accountProxyBase}/projects/${projectId}`;
 
   // ── 1. Fetch goal names from the experience (most reliable) + project goals fallback ──
   let goalNames = {};
 
-  // ── 2. Fetch aggregated report ────────────────────────────────────────────
-  const reportTarget = `${base}/experiments/${experienceId}/aggregated_report`;
-  const reportBody   = {};
-  const reportHeaders = await convertHeaders(appId, appSecret, reportTarget, reportBody);
+  // ── 2. Fetch aggregated report — try project-scoped first, fall back to account-scoped ──
+  const reportBody = {};
+  let reportRes;
+  let attemptedUrl;
 
-  const reportRes = await fetch(
+  // Try project-scoped URL first
+  attemptedUrl = `${base}/experiments/${experienceId}/aggregated_report`;
+  let reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
+  reportRes = await fetch(
     `${proxyBase}/experiments/${experienceId}/aggregated_report`,
     { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
   );
+
+  // If 404, fall back to account-scoped URL (experiment may be in a different project)
+  if (reportRes.status === 404) {
+    attemptedUrl = `${accountBase}/experiments/${experienceId}/aggregated_report`;
+    reportHeaders = await convertHeaders(appId, appSecret, attemptedUrl, reportBody);
+    reportRes = await fetch(
+      `${accountProxyBase}/experiments/${experienceId}/aggregated_report`,
+      { method: "POST", headers: reportHeaders, body: JSON.stringify(reportBody) }
+    );
+  }
 
   if (!reportRes.ok) {
     const err = await reportRes.json().catch(() => ({}));
     const extractMsg = (v) => typeof v === "string" ? v : v?.message ?? v?.text ?? JSON.stringify(v);
     const msg = extractMsg(err?.message) ?? extractMsg(err?.error) ?? `Convert API ${reportRes.status}`;
-    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: `${base}/experiments/${experienceId}/aggregated_report` } });
+    throw Object.assign(new Error(msg), { raw: { ...err, _attempted_url: attemptedUrl } });
   }
 
   const raw = await reportRes.json();
@@ -485,9 +500,13 @@ export async function fetchConvertResults(experienceId) {
 
   let startDate = "", endDate = "";
   try {
-    const expTarget  = `${base}/experiments/${experienceId}`;
-    const expHeaders = await convertHeaders(appId, appSecret, expTarget, null);
-    const expRes     = await fetch(`${proxyBase}/experiments/${experienceId}`, { headers: expHeaders });
+    let expRes;
+    let expHeaders = await convertHeaders(appId, appSecret, `${base}/experiments/${experienceId}`, null);
+    expRes = await fetch(`${proxyBase}/experiments/${experienceId}`, { headers: expHeaders });
+    if (expRes.status === 404) {
+      expHeaders = await convertHeaders(appId, appSecret, `${accountBase}/experiments/${experienceId}`, null);
+      expRes = await fetch(`${accountProxyBase}/experiments/${experienceId}`, { headers: expHeaders });
+    }
     if (expRes.ok) {
       const expRaw  = await expRes.json();
       const expData = expRaw?.data ?? expRaw;
