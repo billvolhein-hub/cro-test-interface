@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
@@ -296,6 +296,8 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
   const [data,     setData]     = useState(savedData?.data   || null);
   const [errors,   setErrors]   = useState(savedData?.errors || {});
   const [open,     setOpen]     = useState(false);
+  const onSaveRef = useRef(onSave);
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
 
   useImperativeHandle(ref, () => ({
     triggerFetch: (targetDomain) => {
@@ -337,7 +339,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
     setData(d);
     setErrors(errs);
     setLoading(false);
-    onSave?.({ data: d, errors: errs, domain: target, fetchedAt: new Date().toISOString() });
+    onSaveRef.current?.({ data: d, errors: errs, domain: target, fetchedAt: new Date().toISOString() });
     onFetchComplete?.();
   };
 
@@ -367,7 +369,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
     { label: "Empty/other",  value: anchorCats["naked/empty"],  color: "#9CA3AF" },
   ].filter(s => s.value > 0);
 
-  const handleClear = () => { setData(null); setErrors({}); setDomain(defaultDomain || ""); onSave?.(null); };
+  const handleClear = () => { setData(null); setErrors({}); setDomain(defaultDomain || ""); onSaveRef.current?.(null); };
 
   return (
     <div style={{ fontFamily: "'Inter',sans-serif", background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
@@ -391,10 +393,16 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
           {data      && !loading && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: BLUE, background: "#DBEAFE", borderRadius: 4, padding: "1px 6px" }}>Data ✓</span>}
         </div>
         {data && !isPortal && (
-          <button onClick={e => { e.stopPropagation(); handleClear(); }}
-            style={{ fontSize: 10, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6 }}>
-            Clear All
-          </button>
+          <div style={{ display: "flex", gap: 6, marginRight: 6 }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => fetchAll(domain)}
+              style={{ fontSize: 10, color: BLUE, background: "none", border: `1px solid #BFDBFE`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+              Refresh
+            </button>
+            <button onClick={handleClear}
+              style={{ fontSize: 10, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+              Clear All
+            </button>
+          </div>
         )}
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: open ? "none" : "rotate(-90deg)", transition: "transform .2s", color: MUTED }}>
           <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
