@@ -369,6 +369,35 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                       {t.audience      && <span style={{ fontSize: 11, fontWeight: 600, color: MUTED,  background: BG,       border: `1px solid ${BORDER}`,   borderRadius: 4, padding: "2px 7px" }}>{t.audience}</span>}
                       {t.primaryMetric && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,  background: "#F0FAFA", border: `1px solid #A8D8D8`,   borderRadius: 4, padding: "2px 7px" }}>{t.primaryMetric}</span>}
                     </div>
+                    {t.results?.goals?.length > 0 && (() => {
+                      const goal      = t.results.goals[0];
+                      const order     = t.results.variantOrder ?? [];
+                      const baseline  = goal.rows.find(r => r.variant === order[0]);
+                      const variants  = goal.rows.filter(r => r.variant !== order[0]);
+                      const totalConv = goal.rows.reduce((s, r) => s + (r.conversions ?? 0), 0);
+                      return (
+                        <div style={{ background: "#F0F6FF", border: "1px solid #BFDBFE", borderRadius: 7, padding: "7px 10px", marginBottom: 10, display: "flex", flexDirection: "column", gap: 5 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: 0.7 }}>
+                            {goal.name} · {totalConv.toLocaleString()} conversions
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {baseline && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: "#475569", background: "#fff", border: "1px solid #CBD5E1", borderRadius: 4, padding: "2px 7px" }}>
+                                {baseline.variant} {baseline.rate.toFixed(2)}%
+                              </span>
+                            )}
+                            {variants.map(v => {
+                              const up = v.change >= 0;
+                              return (
+                                <span key={v.variant} style={{ fontSize: 10, fontWeight: 700, color: up ? "#15803D" : "#DC2626", background: up ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${up ? "#BBF7D0" : "#FECACA"}`, borderRadius: 4, padding: "2px 7px" }}>
+                                  {v.variant} {v.rate.toFixed(2)}% <span style={{ opacity: 0.8 }}>({up ? "+" : ""}{v.change.toFixed(1)}%)</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ display: "flex", gap: 8 }}>
                         {PIE_CRITERIA.map(c => (

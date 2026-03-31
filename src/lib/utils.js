@@ -378,8 +378,8 @@ function parseConvertReport(reportData, goalNames, variationsData, experienceId)
       const name        = varById[v.id] ?? String(v.id);
       const isBaseline  = variationsData.find(x => x.id === v.id)?.is_baseline ?? false;
       const visitors    = Number(v.visitors ?? 0);
-      const conversions = Number(cd.conversions ?? 0);
       const rate        = Number(cd.conversion_rate ?? 0);          // already %
+      const conversions = Number(cd.conversions ?? cd.num_conversions ?? Math.round(visitors * rate / 100));
       const change      = isBaseline ? 0 : Number(cd.conversion_rate_change ?? 0) * 100; // decimal → %
       const confidence  = Number(cd.confidence ?? 0);               // already %
       return { variant: name, visitors, conversions, rate, change, confidence };
