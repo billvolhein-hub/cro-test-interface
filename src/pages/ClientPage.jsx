@@ -222,7 +222,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
         </div>
 
         {/* ── Convert metrics strip ── */}
-        {t.results?.goals?.length > 0 && (t.status === "Test Running" || t.status === "Test Complete") && (() => {
+        {t.results?.goals?.length > 0 && (() => {
           const goal     = t.results.goals[0];
           const order    = t.results.variantOrder ?? [];
           const baseline = goal.rows.find(r => r.variant === order[0]);
