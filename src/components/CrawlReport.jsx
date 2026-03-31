@@ -651,7 +651,7 @@ function ReplaceBtn({ label, onFile }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDomainExtracted, onBuildStart, onBuildComplete }, ref) {
+const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDomainExtracted, onBuildStart, onBuildComplete, isPortal }, ref) {
   const [crawl,     setCrawl]     = useState(crawlReport?.internal ?? null);
   const [issues,    setIssues]    = useState(crawlReport?.issues   ?? null);
   const [domain,    setDomain]    = useState(crawlReport?.domain   ?? "");
@@ -755,7 +755,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
           {issues    && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", borderRadius: 4, padding: "1px 6px" }}>Issues ✓</span>}
           {saving    && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>Saving…</span>}
         </div>
-        {hasData && (
+        {hasData && !isPortal && (
           <button onClick={e => { e.stopPropagation(); handleClear(); }}
             style={{ fontSize: 10, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6 }}>
             Clear All
@@ -770,8 +770,8 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
       {open && (
         <div style={{ padding: "20px 22px" }}>
 
-          {/* Upload row — shown when either file is missing */}
-          {(!crawl || !issues) && (
+          {/* Upload row — shown when either file is missing (admin only) */}
+          {!isPortal && (!crawl || !issues) && (
             <div style={{ display: "flex", gap: 12, marginBottom: hasData ? 24 : 0 }}>
               {!crawl ? (
                 <UploadZone onFile={handleCrawlFile} icon="🕷️" label="Internal HTML CSV"
@@ -794,8 +794,8 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
             </div>
           )}
 
-          {/* Replace row — shown when both files are loaded */}
-          {crawl && issues && (
+          {/* Replace row — shown when both files are loaded (admin only) */}
+          {!isPortal && crawl && issues && (
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               <ReplaceBtn label="Internal CSV" onFile={handleCrawlFile} />
               <ReplaceBtn label="Issues CSV"   onFile={handleIssuesFile} />

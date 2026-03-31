@@ -550,6 +550,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           ref={ahrefsRef}
           defaultDomain={client.crawlReport?.domain ?? ""}
           onFetchComplete={() => setAhrefsDone(true)}
+          isPortal={isPortal}
         />
 
         {/* ── SEO Report ── */}
@@ -560,6 +561,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           onSave={(report) => onSaveCrawlReport?.(clientId, report)}
           onDomainExtracted={(domain) => { setPendingDomain(domain); }}
           onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
+          isPortal={isPortal}
         />
 
         {/* ── Client Notes ── */}

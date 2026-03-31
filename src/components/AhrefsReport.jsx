@@ -290,7 +290,7 @@ function Skeleton({ h = 80 }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchComplete }, ref) {
+const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchComplete, isPortal }, ref) {
   const [domain,   setDomain]   = useState(defaultDomain || "");
   const [loading,  setLoading]  = useState(false);
   const [data,     setData]     = useState(null);
@@ -389,7 +389,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
           {loading   && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>Fetching…</span>}
           {data      && !loading && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: BLUE, background: "#DBEAFE", borderRadius: 4, padding: "1px 6px" }}>Data ✓</span>}
         </div>
-        {data && (
+        {data && !isPortal && (
           <button onClick={e => { e.stopPropagation(); handleClear(); }}
             style={{ fontSize: 10, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6 }}>
             Clear All
@@ -403,8 +403,8 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       {open && (
       <div style={{ padding: "20px 24px" }}>
 
-      {/* ── Domain Input ── */}
-      {!data && (
+      {/* ── Domain Input (admin only) ── */}
+      {!isPortal && !data && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
             <span style={{ padding: "0 10px", fontSize: 12, color: MUTED, borderRight: `1px solid ${BORDER}`, lineHeight: "38px" }}>🔗</span>
@@ -428,7 +428,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
 
       {!data && !loading && (
         <div style={{ textAlign: "center", padding: "40px 0", color: MUTED, fontSize: 13 }}>
-          Enter a domain above and click Fetch Data.
+          {isPortal ? "No backlink data available yet." : "Enter a domain above and click Fetch Data."}
         </div>
       )}
 
