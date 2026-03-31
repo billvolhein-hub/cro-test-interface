@@ -290,11 +290,11 @@ function Skeleton({ h = 80 }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchComplete, isPortal }, ref) {
-  const [domain,   setDomain]   = useState(defaultDomain || "");
+const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchComplete, onSave, savedData, isPortal }, ref) {
+  const [domain,   setDomain]   = useState(savedData?.domain || defaultDomain || "");
   const [loading,  setLoading]  = useState(false);
-  const [data,     setData]     = useState(null);
-  const [errors,   setErrors]   = useState({});
+  const [data,     setData]     = useState(savedData?.data   || null);
+  const [errors,   setErrors]   = useState(savedData?.errors || {});
   const [open,     setOpen]     = useState(false);
 
   useImperativeHandle(ref, () => ({
@@ -337,6 +337,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
     setData(d);
     setErrors(errs);
     setLoading(false);
+    onSave?.({ data: d, errors: errs, domain: target, fetchedAt: new Date().toISOString() });
     onFetchComplete?.();
   };
 
@@ -366,7 +367,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
     { label: "Empty/other",  value: anchorCats["naked/empty"],  color: "#9CA3AF" },
   ].filter(s => s.value > 0);
 
-  const handleClear = () => { setData(null); setErrors({}); setDomain(defaultDomain || ""); };
+  const handleClear = () => { setData(null); setErrors({}); setDomain(defaultDomain || ""); onSave?.(null); };
 
   return (
     <div style={{ fontFamily: "'Inter',sans-serif", background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>

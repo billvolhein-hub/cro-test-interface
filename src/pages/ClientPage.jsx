@@ -549,7 +549,9 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
         <AhrefsReport
           ref={ahrefsRef}
           defaultDomain={client.crawlReport?.domain ?? ""}
+          savedData={client.crawlReport?.ahrefs ?? null}
           onFetchComplete={() => setAhrefsDone(true)}
+          onSave={(ahrefsData) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ahrefs: ahrefsData })}
           isPortal={isPortal}
         />
 
