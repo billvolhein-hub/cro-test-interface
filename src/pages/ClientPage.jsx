@@ -546,13 +546,11 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
         )}
 
         {/* ── Backlink Intelligence ── */}
-        {!isPortal && (
-          <AhrefsReport
-            ref={ahrefsRef}
-            defaultDomain={client.crawlReport?.domain ?? ""}
-            onFetchComplete={() => setAhrefsDone(true)}
-          />
-        )}
+        <AhrefsReport
+          ref={ahrefsRef}
+          defaultDomain={client.crawlReport?.domain ?? ""}
+          onFetchComplete={() => setAhrefsDone(true)}
+        />
 
         {/* ── SEO Report ── */}
         <CrawlReport
