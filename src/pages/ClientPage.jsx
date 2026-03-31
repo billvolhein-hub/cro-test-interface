@@ -222,6 +222,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
         </div>
 
         {/* ── Convert metrics strip ── */}
+        {t.results && <div style={{ fontSize: 9, color: "#2563EB", marginBottom: -6 }}>DEBUG results keys: {Object.keys(t.results).join(", ")} | goals: {t.results.goals?.length ?? "none"}</div>}
         {t.results?.goals?.length > 0 && (() => {
           const goal     = t.results.goals[0];
           const order    = t.results.variantOrder ?? [];
