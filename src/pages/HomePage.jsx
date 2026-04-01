@@ -79,15 +79,14 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
     : tests.filter(t => resolveClientId(t) === activeClientId);
   const sorted = [...filtered].sort((a, b) => Number(pieScore(b)) - Number(pieScore(a)));
 
-  const handleNew = async () => {
-    const t = blankTest();
+  const handleNew = async (clientId) => {
+    const t = { ...blankTest(), clientId: clientId ?? null };
     const saved = await onCreateTest(t);
     navigate(`/tests/${saved.id}/edit`);
   };
 
   const handleIdeationSelect = async (testData, screenshots) => {
-    const clientId = activeClientId !== "all" ? activeClientId : (clients[0]?.id ?? null);
-    const t = { ...blankTest(), clientId, ...testData };
+    const t = { ...blankTest(), ...testData };
     const saved = await onCreateTest(t);
     if (screenshots && Object.keys(screenshots).length) {
       await onSaveScreenshots(saved.id, screenshots);

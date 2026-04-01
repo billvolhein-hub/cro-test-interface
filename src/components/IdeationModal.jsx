@@ -137,8 +137,10 @@ export default function IdeationModal({
   const [pageUrl, setPageUrl]             = useState("");
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError]                 = useState("");
-  // Holds the captured screenshot so handleSelect can use it after analysis
   const capturedScreenshot                = useRef(null);
+
+  const defaultClientId = () => activeClientId !== "all" ? activeClientId : (clients[0]?.id ?? null);
+  const [selectedClientId, setSelectedClientId] = useState(defaultClientId);
 
   const reset = () => {
     setStep(STEP_CHOOSE);
@@ -148,6 +150,7 @@ export default function IdeationModal({
     setRecommendations([]);
     setError("");
     capturedScreenshot.current = null;
+    setSelectedClientId(defaultClientId());
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -292,6 +295,7 @@ export default function IdeationModal({
     });
 
     const testData = {
+      clientId:         selectedClientId,
       testName:         rec.testName,
       pageUrl:          pageUrl || rec.pageUrl || "",
       if:               rec.if,
@@ -384,9 +388,23 @@ export default function IdeationModal({
 
           {/* ── STEP 0: Choose ─────────────────────────────────────────────── */}
           {step === STEP_CHOOSE && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {clients.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Client</div>
+                <select
+                  value={selectedClientId ?? ""}
+                  onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, background: BG, outline: "none" }}
+                >
+                  <option value="">— No client —</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
               <button
-                onClick={() => { handleClose(); onSelectBlank(); }}
+                onClick={() => { handleClose(); onSelectBlank(selectedClientId); }}
                 style={{
                   background: BG, border: `1.5px solid ${BORDER}`, borderRadius: 10,
                   padding: "28px 20px", cursor: "pointer", textAlign: "left",
@@ -425,6 +443,7 @@ export default function IdeationModal({
                   AI POWERED
                 </div>
               </button>
+            </div>
             </div>
           )}
 

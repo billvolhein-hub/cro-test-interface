@@ -24,10 +24,18 @@ export default async function handler(req, res) {
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
+    // Wait for JS-rendered content to settle after network is quiet
+    await page.evaluate(() => new Promise(resolve => {
+      if (document.readyState === "complete") return resolve();
+      window.addEventListener("load", resolve, { once: true });
+    }));
+    await new Promise(r => setTimeout(r, 2500));
+
     const captureH = await page.evaluate(() =>
       Math.min(document.body.scrollHeight, 2000)
     );
     await page.setViewport({ width: 1440, height: captureH });
+    await new Promise(r => setTimeout(r, 500));
 
     const buf = await page.screenshot({ type: "jpeg", quality: 82 });
     await browser.close();
