@@ -591,7 +591,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           ref={crawlRef}
           clientId={clientId}
           crawlReport={client.crawlReport}
-          onSave={(report) => onSaveCrawlReport?.(clientId, report)}
+          onSave={(report) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ...report })}
           onDomainExtracted={(domain) => { setPendingDomain(domain); }}
           onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
           isPortal={isPortal}

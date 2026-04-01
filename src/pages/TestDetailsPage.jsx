@@ -191,6 +191,223 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
   };
 
   const [pagePdfLoading, setPagePdfLoading] = useState(false);
+  const [docLoading, setDocLoading] = useState(false);
+
+  const handleDownloadDoc = async () => {
+    setDocLoading(true);
+    try {
+      const {
+        Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+        Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
+        PageBreak, Spacing,
+      } = await import("docx");
+      const { saveAs } = await import("file-saver");
+
+      const client = clients?.find(c => c.id === test.clientId);
+      const scoreNum = Number(pieScore(test));
+      const scoreLabelStr = scoreLabel(scoreNum);
+      const children = [];
+
+      // ── Helpers ──────────────────────────────────────────────────────
+      const heading = (text, lvl = HeadingLevel.HEADING_2, color = "1B3A6B") =>
+        new Paragraph({
+          text,
+          heading: lvl,
+          spacing: { before: 280, after: 120 },
+          run: { color },
+        });
+
+      const para = (runs, opts = {}) =>
+        new Paragraph({ children: Array.isArray(runs) ? runs : [runs], spacing: { after: 120 }, ...opts });
+
+      const run = (text, opts = {}) => new TextRun({ text: String(text ?? ""), font: "Calibri", size: 22, ...opts });
+
+      const labelRun = (text) => run(text, { bold: true, color: "6B7280", size: 18, allCaps: true });
+
+      const divider = () => new Paragraph({
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "E5E7EB" } },
+        spacing: { after: 160 },
+      });
+
+      const stripHtml = (html) => (html || "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<li[^>]*>/gi, "• ")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, (_, t) => `\n${t.replace(/<[^>]+>/g, "").toUpperCase()}\n`)
+        .replace(/<[^>]+>/g, "")
+        .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      // ── Title block ──────────────────────────────────────────────────
+      children.push(new Paragraph({
+        children: [run(test.testName || "Untitled Test", { bold: true, size: 52, color: "1B3A6B" })],
+        spacing: { after: 120 },
+      }));
+
+      const metaParts = [
+        client ? `Client: ${client.name}` : null,
+        test.status ? `Status: ${test.status}` : null,
+        test.pageUrl ? `URL: ${test.pageUrl}` : null,
+        `Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+      ].filter(Boolean);
+      children.push(para(metaParts.map((p, i) => run(
+        i < metaParts.length - 1 ? p + "   ·   " : p,
+        { color: "6B7280", size: 18 }
+      ))));
+
+      // PIE score line
+      children.push(para([
+        run(`PIE Score: `, { bold: true, size: 22, color: "374151" }),
+        run(`${scoreNum}  —  ${scoreLabelStr}`, { bold: true, size: 22, color: scoreColor(scoreNum).replace("#", "") }),
+        ...(test.testType ? [run(`     |     Test Type: ${test.testType}`, { size: 22, color: "6B7280" })] : []),
+        ...(test.audience ? [run(`     |     Audience: ${test.audience}`, { size: 22, color: "6B7280" })] : []),
+      ]));
+      children.push(divider());
+
+      // ── Hypothesis ───────────────────────────────────────────────────
+      if (test.if || test.then || test.because) {
+        children.push(heading("Hypothesis"));
+        const hypoBlocks = [
+          { key: "if",      label: "IF — The Change",         color: IF_COLOR.replace("#", "") },
+          { key: "then",    label: "THEN — Expected Outcome",  color: THEN_COLOR.replace("#", "") },
+          { key: "because", label: "BECAUSE — The Rationale",  color: BECAUSE_COLOR.replace("#", "") },
+        ];
+        hypoBlocks.forEach(({ key, label, color }) => {
+          if (!test[key]) return;
+          children.push(para([run(label.toUpperCase(), { bold: true, size: 18, color, allCaps: true })]));
+          children.push(para([run(test[key], { size: 22, color: "374151" })], {
+            indent: { left: 360 },
+            border: { left: { style: BorderStyle.THICK, size: 12, color } },
+            spacing: { after: 160 },
+          }));
+        });
+        children.push(divider());
+      }
+
+      // ── Findings ─────────────────────────────────────────────────────
+      if (test.findings) {
+        children.push(heading("Test Findings", HeadingLevel.HEADING_2, "15803D"));
+        const plain = stripHtml(test.findings);
+        plain.split("\n").forEach(line => {
+          if (!line.trim()) return;
+          const isBullet = line.startsWith("• ");
+          children.push(new Paragraph({
+            children: [run(line.replace(/^• /, ""), { size: 22 })],
+            bullet: isBullet ? { level: 0 } : undefined,
+            spacing: { after: 80 },
+          }));
+        });
+        children.push(divider());
+      }
+
+      // ── Results ──────────────────────────────────────────────────────
+      if (test.results?.goals?.length) {
+        children.push(heading("Test Results", HeadingLevel.HEADING_2, "0E7490"));
+        test.results.goals.forEach((goal, gi) => {
+          children.push(para([run(`Goal ${gi + 1}: ${goal.name}`, { bold: true, size: 22, color: "1B3A6B" })]));
+          const headerRow = new TableRow({
+            children: ["Variant", "Visitors", "Conv. Rate", "Conversions", "Change"].map(h =>
+              new TableCell({
+                children: [para([run(h, { bold: true, size: 18, color: "6B7280" })])],
+                shading: { type: ShadingType.SOLID, color: "F3F4F6", fill: "F3F4F6" },
+                width: { size: 20, type: WidthType.PERCENTAGE },
+              })
+            ),
+          });
+          const dataRows = (goal.rows ?? []).map((row, ri) => {
+            const isBaseline = ri === 0;
+            const changeText = isBaseline ? "baseline" : `${row.change >= 0 ? "+" : ""}${(row.change ?? 0).toFixed(1)}%`;
+            const changeColor = isBaseline ? "374151" : (row.change >= 0 ? "15803D" : "DC2626");
+            return new TableRow({
+              children: [
+                row.variant,
+                (row.visitors ?? 0).toLocaleString(),
+                `${(row.rate ?? 0).toFixed(2)}%`,
+                (row.conversions ?? 0).toLocaleString(),
+                changeText,
+              ].map((val, ci) => new TableCell({
+                children: [para([run(val, { bold: isBaseline, size: 20, color: ci === 4 ? changeColor : "374151" })])],
+                width: { size: 20, type: WidthType.PERCENTAGE },
+              })),
+            });
+          });
+          children.push(new Table({
+            rows: [headerRow, ...dataRows],
+            width: { size: 100, type: WidthType.PERCENTAGE },
+          }));
+          children.push(new Paragraph({ spacing: { after: 200 } }));
+        });
+        children.push(divider());
+      }
+
+      // ── PIE Breakdown ────────────────────────────────────────────────
+      children.push(heading("PIE Score Breakdown"));
+      PIE_CRITERIA.forEach(c => {
+        const val = Number(test[c.key] ?? 0);
+        children.push(para([
+          run(`${c.label}  `, { bold: true, size: 22, color: c.color.replace("#", "") }),
+          run(`${val}/10`, { bold: true, size: 22, color: c.color.replace("#", "") }),
+          run(`   —   ${c.description}`, { size: 20, color: "6B7280" }),
+        ]));
+      });
+      children.push(divider());
+
+      // ── Metrics ──────────────────────────────────────────────────────
+      if (test.primaryMetric || (test.secondaryMetrics || []).length > 0) {
+        children.push(heading("Metrics"));
+        if (test.primaryMetric) {
+          children.push(para([
+            run("Primary KPI:  ", { bold: true, size: 22 }),
+            run(test.primaryMetric, { size: 22 }),
+          ]));
+        }
+        if ((test.secondaryMetrics || []).length > 0) {
+          children.push(para([
+            run("Secondary:  ", { bold: true, size: 22 }),
+            run(test.secondaryMetrics.join(", "), { size: 22, color: "6B7280" }),
+          ]));
+        }
+        children.push(divider());
+      }
+
+      // ── Annotations ──────────────────────────────────────────────────
+      const allOverlays = Object.entries(overlaysByVariant).flatMap(([variant, ovs]) =>
+        (ovs ?? []).filter(o => !o.isClientNote).map(o => ({ ...o, _variant: variant }))
+      );
+      if (allOverlays.length > 0) {
+        children.push(heading("Test Annotations"));
+        allOverlays.forEach(o => {
+          const zone = zoneForOverlay(o, test);
+          children.push(para([
+            run(`[${o._variant}]  ${o.label || ""}`, { bold: true, size: 22, color: (o.color || "#374151").replace("#", "") }),
+            ...(zone ? [run(`  —  ${zone.label}`, { size: 20, color: "6B7280" })] : []),
+          ]));
+          if (o.note) {
+            children.push(para([run(o.note, { size: 20, color: "374151" })], { indent: { left: 360 }, spacing: { after: 80 } }));
+          }
+        });
+      }
+
+      // ── Build & save ─────────────────────────────────────────────────
+      const document = new Document({
+        styles: {
+          default: {
+            document: { run: { font: "Calibri", size: 22 } },
+          },
+        },
+        sections: [{ children }],
+      });
+
+      const blob = await Packer.toBlob(document);
+      saveAs(blob, `${(test.testName || "test").replace(/[^a-z0-9]/gi, "-")}.docx`);
+    } catch (e) {
+      console.error("Doc error:", e);
+      alert(`Document generation failed: ${e.message}`);
+    } finally {
+      setDocLoading(false);
+    }
+  };
 
   const handleDownloadPagePDF = async () => {
     setPagePdfLoading(true);
@@ -328,6 +545,17 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(0,0,0,.2)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke={TEXT} strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
             ) : (
               <><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="8" height="10" rx="1" stroke={TEXT} strokeWidth="1.5"/><path d="M10 4h2a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-1" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round"/><path d="M5 9h4M5 7h4M5 11h2" stroke={TEXT} strokeWidth="1.2" strokeLinecap="round"/></svg>Download PDF</>
+            )}
+          </button>
+          <button
+            onClick={handleDownloadDoc}
+            disabled={docLoading}
+            style={{ background: CARD, color: TEXT, border: `1.5px solid ${BORDER}`, borderRadius: 7, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: docLoading ? "wait" : "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 7, opacity: docLoading ? 0.7 : 1 }}
+          >
+            {docLoading ? (
+              <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(0,0,0,.2)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke={TEXT} strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
+            ) : (
+              <><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke={TEXT} strokeWidth="1.5" strokeLinejoin="round"/><path d="M10 2v3h3" stroke={TEXT} strokeWidth="1.5" strokeLinejoin="round"/><path d="M5 8h6M5 11h4" stroke={TEXT} strokeWidth="1.2" strokeLinecap="round"/></svg>Download Document</>
             )}
           </button>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from "react";
+import DirectoryTreeModal from "./DirectoryTreeModal";
 import { CARD, BORDER, BG, TEXT, MUTED, TEAL, ACCENT } from "../lib/constants";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -35,6 +36,18 @@ function parseCrawlCSV(text) {
   const allRows = lines.slice(1).filter(l => l.trim()).map(l => parseLine(l));
   const htmlRows = allRows.filter(r => col(r, "Content Type").startsWith("text/html") && col(r, "Status Code") === "200");
   return { col, allRows, htmlRows };
+}
+
+function parseNodes(allRows, col) {
+  const MAX = 5000;
+  return allRows.slice(0, MAX).map(r => ({
+    url:     col(r, "Address"),
+    status:  col(r, "Status Code"),
+    index:   col(r, "Indexability") === "Indexable" && col(r, "Status Code") === "200",
+    depth:   parseInt(col(r, "Crawl Depth")) || 0,
+    inlinks: parseInt(col(r, "Unique Inlinks")) || 0,
+    title:   col(r, "Title 1").slice(0, 80),
+  })).filter(n => n.url);
 }
 
 function parseIssuesCSV(text) {
@@ -656,6 +669,8 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
   const [issues,    setIssues]    = useState(crawlReport?.issues   ?? null);
   const [domain,    setDomain]    = useState(crawlReport?.domain   ?? "");
   const [crawledAt, setCrawledAt] = useState(crawlReport?.date     ?? "");
+  const [treeNodes, setTreeNodes] = useState(crawlReport?.nodes    ?? null);
+  const [treeOpen,  setTreeOpen]  = useState(false);
   const [loadingC,  setLoadingC]  = useState(false);
   const [loadingI,  setLoadingI]  = useState(false);
   const [saving,    setSaving]    = useState(false);
@@ -670,7 +685,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
     if (!onSave) return;
     setSaving(true);
     try {
-      await onSave({ internal: crawl, issues, domain, date: crawledAt, ...patch });
+      await onSave({ internal: crawl, issues, domain, date: crawledAt, nodes: treeNodes, ...patch });
     } finally { setSaving(false); }
   };
 
@@ -684,10 +699,11 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
         try {
           const { col, allRows, htmlRows } = parseCrawlCSV(text);
           const s = computeStats(allRows, htmlRows, col);
+          const nodes = parseNodes(allRows, col);
           const dom = htmlRows[0] ? (() => { try { return new URL(htmlRows[0][0]).hostname; } catch { return ""; } })() : "";
           const now = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-          setCrawl(s); setDomain(dom); setCrawledAt(now);
-          persist({ internal: s, domain: dom, date: now });
+          setCrawl(s); setDomain(dom); setCrawledAt(now); setTreeNodes(nodes);
+          persist({ internal: s, nodes, domain: dom, date: now });
           if (dom) onDomainExtracted?.(dom);
           onBuildComplete?.("crawl");
         } catch (err) { setErrorC("Could not parse crawl CSV: " + err.message); onBuildComplete?.("crawl"); }
@@ -755,6 +771,15 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
           {issues    && <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", borderRadius: 4, padding: "1px 6px" }}>Issues ✓</span>}
           {saving    && <span style={{ marginLeft: 6, fontSize: 10, color: MUTED }}>Saving…</span>}
         </div>
+        {treeNodes?.length > 0 && (
+          <button
+            onClick={e => { e.stopPropagation(); setTreeOpen(true); }}
+            style={{ fontSize: 10, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="2" stroke="#15803D" strokeWidth="1.4"/><circle cx="3" cy="12" r="2" stroke="#15803D" strokeWidth="1.4"/><circle cx="13" cy="12" r="2" stroke="#15803D" strokeWidth="1.4"/><path d="M8 5v3M8 8l-4 2M8 8l4 2" stroke="#15803D" strokeWidth="1.2" strokeLinecap="round"/></svg>
+            Site Tree
+          </button>
+        )}
         {hasData && !isPortal && (
           <button onClick={e => { e.stopPropagation(); handleClear(); }}
             style={{ fontSize: 10, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6 }}>
@@ -809,6 +834,10 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
           {crawl  && <CrawlBody  stats={crawl} />}
           {issues && <IssuesBody stats={issues} />}
         </div>
+      )}
+
+      {treeOpen && treeNodes?.length > 0 && (
+        <DirectoryTreeModal nodes={treeNodes} onClose={() => setTreeOpen(false)} />
       )}
     </div>
   );

@@ -9,25 +9,41 @@ const STEP_UPLOAD    = 1;
 const STEP_ANALYZING = 2;
 const STEP_RESULTS   = 3;
 
-const SYSTEM_PROMPT = `You are a conversion rate optimization (CRO) expert analyzing web pages for A/B testing opportunities.
+const SYSTEM_PROMPT = `You are a senior CRO strategist with 15 years of experience running A/B tests. You think in terms of behavioral psychology, conversion funnels, and statistical significance. You have an opinionated, specific point of view — not generic advice.
 
-You will receive:
-1. A screenshot of the current page (control)
-2. Google Analytics 90-day data (CSV)
-3. Google Search Console 90-day data (CSV)
-4. Optionally, the page URL
+CRITICAL DIVERSITY RULE: Each of the 3 recommendations MUST target a completely different conversion lever from this list. Never repeat a lever across the 3 tests:
+  A) VALUE PROPOSITION — headline, subheadline, or unique selling proposition clarity
+  B) FRICTION REMOVAL — reduce cognitive load, form complexity, or decision fatigue
+  C) TRUST & ANXIETY — social proof, credentials, testimonials, guarantees, security signals
+  D) MOTIVATION & URGENCY — loss aversion, scarcity, FOMO, emotional triggers, benefit framing
+  E) RELEVANCE & MESSAGE MATCH — audience segmentation, traffic-source alignment, personalisation
+  F) VISUAL HIERARCHY & ATTENTION — CTA placement, eye-flow, contrast, whitespace, above-the-fold composition
+  G) NAVIGATION & FINDABILITY — menu structure, internal links, search, page depth to conversion
 
-Analyze the data and visual thoroughly to identify high-impact conversion testing opportunities grounded in the data.
+How to analyze the data:
+- GA: find the highest-traffic pages with the worst engagement (bounce rate, low time-on-page, few pages/session). Surface device split anomalies. Note if mobile traffic > 55% but layout appears desktop-optimised.
+- GSC: find queries with high impressions but CTR below 3% (intent mismatch). Find branded vs non-branded query ratio. Surface the top keyword themes — do they match the page headline?
+- Screenshot: scan for (1) is the value prop visible without scrolling? (2) how many competing CTAs are there? (3) what trust signals are present above the fold? (4) is the form long? (5) what's the colour contrast of the primary CTA?
 
-Return ONLY valid JSON (no markdown, no explanation) in exactly this format:
+For each recommendation you MUST:
+1. Name the exact conversion lever (A–G above) you are targeting
+2. Cite a specific metric from the data (e.g. "67% mobile traffic, layout is desktop-first")
+3. Name the behavioural principle driving the test (e.g. cognitive ease, loss aversion, authority bias, social proof, commitment & consistency, reciprocity, FOMO)
+4. Describe ONE clean change — never compound multiple changes in a single test
+5. Set successProbability based on: evidence strength × traffic volume × implementation cleanliness (high evidence + high traffic + clean test = 80+)
+
+Return ONLY valid JSON, no markdown, no explanation:
 {
   "recommendations": [
     {
+      "lever": "B",
+      "behaviouralPrinciple": "Cognitive ease",
+      "dataEvidence": "Specific metric from GA/GSC that supports this test",
       "testName": "Short test name (max 60 chars)",
       "successProbability": 72,
-      "if": "we make this specific change to the page element or layout",
-      "then": "this measurable outcome will improve for the target audience",
-      "because": "rationale grounded in the GA/GSC data and visual page analysis",
+      "if": "we make this one specific, measurable change to [exact element]",
+      "then": "this measurable outcome will improve because visitors will [specific behaviour change]",
+      "because": "Data evidence: [cite specific number]. Behavioural principle: [explain why this change addresses the root cause]",
       "testType": "A/B",
       "audience": "All users",
       "primaryMetric": "Form submissions",
@@ -38,7 +54,7 @@ Return ONLY valid JSON (no markdown, no explanation) in exactly this format:
       "overlays": [
         {
           "type": "CTA Highlight",
-          "note": "Brief annotation (max 60 chars)",
+          "note": "Brief annotation max 60 chars",
           "xFrac": 0.5,
           "yFrac": 0.3
         }
@@ -47,17 +63,17 @@ Return ONLY valid JSON (no markdown, no explanation) in exactly this format:
   ]
 }
 
-Rules:
-- successProbability: 1–100 integer estimating probability of a winning test result
-- potential, importance, ease: 1–10 integers for PIE scoring
-- overlays xFrac/yFrac: 0–1 fractions of the uploaded screenshot width/height indicating where the change occurs
-- overlay type must be one of: "Add/Blur", "Removed", "Copy Change", "Layout Shift", "Sticky Element", "CTA Highlight", "Brand Accent", "Annotation"
-- audience must be one of: "All users", "New users", "Returning users", "Organic search", "Paid search", "Mobile users", "Desktop users", "Direct traffic"
-- testType must be one of: "A/B", "A/B/n", "Multivariate", "Split URL", "Redirect"
-- primaryMetric must be one of: "Form submissions", "RFI completions", "CTA clicks", "Scroll depth", "Time on page", "Bounce rate", "Sessions", "Conversion rate", "Engagement rate", "Exit rate"
-- Each recommendation should have 1–3 overlays
-- Make recommendations meaningfully different from each other (different page areas or strategies)
-- Ground successProbability in data evidence — high traffic + clear friction = higher probability`;
+Field rules:
+- lever: one of A B C D E F G — must be different across all 3 recommendations
+- successProbability: 1–100 integer
+- potential, importance, ease: 1–10 integers (PIE)
+- overlays xFrac/yFrac: 0.0–1.0 fractions of screenshot width/height
+- overlay type: one of "Add/Blur", "Removed", "Copy Change", "Layout Shift", "Sticky Element", "CTA Highlight", "Brand Accent", "Annotation"
+- audience: one of "All users", "New users", "Returning users", "Organic search", "Paid search", "Mobile users", "Desktop users", "Direct traffic"
+- testType: one of "A/B", "A/B/n", "Multivariate", "Split URL", "Redirect"
+- primaryMetric: one of "Form submissions", "RFI completions", "CTA clicks", "Scroll depth", "Time on page", "Bounce rate", "Sessions", "Conversion rate", "Engagement rate", "Exit rate"
+- 1–3 overlays per recommendation
+- if the data does not support a high-confidence recommendation, lower the successProbability rather than fabricating evidence`;
 
 // Crop an image to a vertical slice centered on (centerX, centerY) in 0-1 coords.
 // Returns a new dataUrl showing ~55% of the image height focused on the area of interest.
@@ -223,8 +239,16 @@ export default function IdeationModal({
             gscTextTruncated,
             "",
             screenshot
-              ? "Analyze the screenshot and data above. Return exactly 3 CRO test recommendations as JSON."
-              : "Analyze the data above (no screenshot available). Return exactly 3 CRO test recommendations as JSON.",
+              ? [
+                  "Before writing your recommendations, silently identify which 3 conversion levers (A–G) you will target — each must be a DIFFERENT letter.",
+                  "Cite specific metrics from the GA and GSC data above as evidence for each recommendation.",
+                  "Then return exactly 3 CRO test recommendations as JSON, each targeting a unique lever.",
+                ].join(" ")
+              : [
+                  "Before writing your recommendations, silently identify which 3 conversion levers (A–G) you will target — each must be a DIFFERENT letter.",
+                  "Cite specific metrics from the GA and GSC data above as evidence for each recommendation.",
+                  "Then return exactly 3 CRO test recommendations as JSON (no screenshot available), each targeting a unique lever.",
+                ].join(" "),
           ].join("\n"),
         },
       ];
@@ -239,8 +263,9 @@ export default function IdeationModal({
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-opus-4-6",
           max_tokens: 4096,
+          temperature: 1,
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userContent }],
         }),
