@@ -3,17 +3,15 @@ import { useEffect, useRef, useState } from "react";
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function nodeColor(n) {
   const status = String(n.status ?? "");
-  // Always derive from status code first — handles stale cached data
-  if (status.startsWith("3")) return "#F59E0B"; // redirect — amber
-  if (status.startsWith("4")) return "#DC2626"; // 4xx — red
-  if (status.startsWith("5")) return "#7C3AED"; // 5xx — purple
+  if (!status || status === "0") return "#6B7280"; // unknown / not crawled — grey
+  if (status.startsWith("3")) return "#F59E0B";    // redirect — amber
+  if (status.startsWith("4")) return "#DC2626";    // 4xx — red
+  if (status.startsWith("5")) return "#7C3AED";    // 5xx — purple
   if (status === "200" && n.index) {
-    // Indexable — shade by crawl depth
     const greens = ["#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"];
     return greens[Math.min(n.depth ?? 0, greens.length - 1)];
   }
-  // 200 but marked non-indexable (noindex, canonical, etc.)
-  return "#DC2626";
+  return "#DC2626"; // 200 but non-indexable (noindex, canonical, etc.)
 }
 
 function buildGraph(rawNodes) {
@@ -57,6 +55,7 @@ function Legend() {
     { color: "#F59E0B", label: "Redirect (3xx)" },
     { color: "#DC2626", label: "Non-indexable / 4xx" },
     { color: "#7C3AED", label: "Server Error (5xx)" },
+    { color: "#6B7280", label: "Unknown / not crawled" },
   ];
   return (
     <div style={{ position: "absolute", bottom: 24, left: 24, background: "rgba(0,0,0,.72)", borderRadius: 8, padding: "12px 16px", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,.12)" }}>

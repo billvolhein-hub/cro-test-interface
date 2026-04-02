@@ -40,14 +40,24 @@ function parseCrawlCSV(text) {
 
 function parseNodes(allRows, col) {
   const MAX = 5000;
-  return allRows.slice(0, MAX).map(r => ({
-    url:     col(r, "Address"),
-    status:  col(r, "Status Code"),
-    index:   col(r, "Indexability") === "Indexable" && col(r, "Status Code") === "200",
-    depth:   parseInt(col(r, "Crawl Depth")) || 0,
-    inlinks: parseInt(col(r, "Unique Inlinks")) || 0,
-    title:   col(r, "Title 1").slice(0, 80),
-  })).filter(n => n.url);
+  return allRows.slice(0, MAX).map(r => {
+    let status = col(r, "Status Code");
+    // Screaming Frog stores 0 for redirect URLs it didn't re-crawl.
+    // Recover the real code from "Indexability Status" (e.g. "301 Redirect").
+    if (!status || status === "0") {
+      const idxStatus = col(r, "Indexability Status");
+      const m = idxStatus.match(/^(\d{3})/);
+      if (m) status = m[1];
+    }
+    return {
+      url:     col(r, "Address"),
+      status,
+      index:   col(r, "Indexability") === "Indexable" && status === "200",
+      depth:   parseInt(col(r, "Crawl Depth")) || 0,
+      inlinks: parseInt(col(r, "Unique Inlinks")) || 0,
+      title:   col(r, "Title 1").slice(0, 80),
+    };
+  }).filter(n => n.url);
 }
 
 function parseIssuesCSV(text) {
