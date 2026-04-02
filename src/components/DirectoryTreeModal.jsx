@@ -175,9 +175,9 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
         .nodeColor(n => nodeColor(n))
         .nodeOpacity(0.92)
         .nodeVal(n => Math.max(1, (n.inlinks || 0) * 0.4 + 1.5))
-        .linkColor(() => "rgba(255,255,255,0.15)")
-        .linkWidth(0.4)
-        .linkOpacity(0.6)
+        .linkColor(() => "rgba(255,255,255,0.55)")
+        .linkWidth(0.8)
+        .linkOpacity(0.9)
         .onNodeHover(node => {
           setHoveredNode(node || null);
           if (mountRef.current) mountRef.current.style.cursor = node ? "pointer" : "default";
