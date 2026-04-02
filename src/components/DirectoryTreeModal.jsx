@@ -145,7 +145,8 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
   const mousePosRef = useRef({ x: 0, y: 0 });
   const [hoveredNode, setHoveredNode] = useState(null);
   const [tooltipPos,  setTooltipPos]  = useState({ x: 0, y: 0 });
-  const [ready, setReady] = useState(false);
+  const [ready,       setReady]       = useState(false);
+  const [fullscreen,  setFullscreen]  = useState(false);
 
   // Track real mouse position separately — onNodeHover's 2nd arg is prevNode, not an event
   useEffect(() => {
@@ -204,8 +205,17 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const modalStyle = fullscreen
+    ? { position: "fixed", inset: 0, zIndex: 2000, background: "#1a1a2e", fontFamily: "'Inter',sans-serif" }
+    : { position: "fixed", inset: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.6)", backdropFilter: "blur(4px)", fontFamily: "'Inter',sans-serif" };
+
+  const innerStyle = fullscreen
+    ? { position: "absolute", inset: 0, background: "#1a1a2e", overflow: "hidden" }
+    : { position: "relative", width: "80%", height: "80vh", background: "#1a1a2e", borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.7)", border: "1px solid rgba(255,255,255,.1)" };
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#1a1a2e", fontFamily: "'Inter',sans-serif" }}>
+    <div style={modalStyle} onClick={e => { if (!fullscreen && e.target === e.currentTarget) onClose(); }}>
+    <div style={innerStyle}>
       {/* Top bar */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", background: "rgba(0,0,0,.5)", backdropFilter: "blur(8px)", borderBottom: "1px solid rgba(255,255,255,.1)" }}>
         <div style={{ flex: 1 }}>
@@ -215,6 +225,10 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
         <button onClick={() => graphRef.current?.zoomToFit(600, 80)}
           style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", color: "#D1D5DB", padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
           Zoom to Fit
+        </button>
+        <button onClick={() => { setFullscreen(f => !f); setTimeout(() => { graphRef.current?.width(mountRef.current?.clientWidth).height(mountRef.current?.clientHeight); graphRef.current?.zoomToFit(400, 60); }, 50); }}
+          style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", color: "#D1D5DB", padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+          {fullscreen ? "⊡ Exit Fullscreen" : "⛶ Fullscreen"}
         </button>
         <button onClick={onClose}
           style={{ background: "rgba(220,38,38,.15)", border: "1px solid rgba(220,38,38,.3)", color: "#FCA5A5", padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
@@ -241,6 +255,7 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
       <div style={{ position: "absolute", bottom: 24, right: 24, fontSize: 10, color: "#4B5563", textAlign: "right", lineHeight: 1.8 }}>
         Left-click + drag · Scroll to zoom · Right-click to pan
       </div>
+    </div>{/* inner */}
     </div>
   );
 }
