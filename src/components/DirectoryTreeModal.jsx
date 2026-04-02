@@ -143,10 +143,30 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
   const mountRef    = useRef(null);
   const graphRef    = useRef(null);
   const mousePosRef = useRef({ x: 0, y: 0 });
+  const dragRef     = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
+  const innerRef    = useRef(null);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [tooltipPos,  setTooltipPos]  = useState({ x: 0, y: 0 });
   const [ready,       setReady]       = useState(false);
   const [fullscreen,  setFullscreen]  = useState(false);
+  const [pos,         setPos]         = useState({ x: 0, y: 0 }); // offset from center
+
+  const startDrag = (e) => {
+    if (fullscreen) return;
+    e.preventDefault();
+    dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    const onMove = (ev) => {
+      if (!dragRef.current.dragging) return;
+      setPos({ x: dragRef.current.origX + ev.clientX - dragRef.current.startX, y: dragRef.current.origY + ev.clientY - dragRef.current.startY });
+    };
+    const onUp = () => {
+      dragRef.current.dragging = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   // Track real mouse position separately — onNodeHover's 2nd arg is prevNode, not an event
   useEffect(() => {
@@ -211,22 +231,24 @@ export default function DirectoryTreeModal({ nodes: rawNodes, onClose }) {
 
   const innerStyle = fullscreen
     ? { position: "absolute", inset: 0, background: "#1a1a2e", overflow: "hidden" }
-    : { position: "relative", width: "80%", height: "80vh", background: "#1a1a2e", borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.7)", border: "1px solid rgba(255,255,255,.1)" };
+    : { position: "relative", width: "80%", height: "80vh", background: "#1a1a2e", borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.7)", border: "1px solid rgba(255,255,255,.1)", transform: `translate(${pos.x}px, ${pos.y}px)`, transition: dragRef.current.dragging ? "none" : "box-shadow .2s" };
 
   return (
     <div style={modalStyle} onClick={e => { if (!fullscreen && e.target === e.currentTarget) onClose(); }}>
     <div style={innerStyle}>
-      {/* Top bar */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", background: "rgba(0,0,0,.5)", backdropFilter: "blur(8px)", borderBottom: "1px solid rgba(255,255,255,.1)" }}>
+      {/* Top bar — drag handle */}
+      <div
+        onMouseDown={startDrag}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", background: "rgba(0,0,0,.5)", backdropFilter: "blur(8px)", borderBottom: "1px solid rgba(255,255,255,.1)", cursor: fullscreen ? "default" : "grab", userSelect: "none" }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Site Directory Tree</div>
-          <div style={{ fontSize: 10, color: "#6B7280" }}>3D Force-Directed Graph · click a node to open URL</div>
+          <div style={{ fontSize: 10, color: "#6B7280" }}>3D Force-Directed Graph · click a node to open URL · drag title bar to move</div>
         </div>
         <button onClick={() => graphRef.current?.zoomToFit(600, 80)}
           style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", color: "#D1D5DB", padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
           Zoom to Fit
         </button>
-        <button onClick={() => { setFullscreen(f => !f); setTimeout(() => { graphRef.current?.width(mountRef.current?.clientWidth).height(mountRef.current?.clientHeight); graphRef.current?.zoomToFit(400, 60); }, 50); }}
+        <button onClick={() => { setFullscreen(f => !f); if (!fullscreen) setPos({ x: 0, y: 0 }); setTimeout(() => { graphRef.current?.width(mountRef.current?.clientWidth).height(mountRef.current?.clientHeight); graphRef.current?.zoomToFit(400, 60); }, 50); }}
           style={{ background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", color: "#D1D5DB", padding: "6px 14px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
           {fullscreen ? "⊡ Exit Fullscreen" : "⛶ Fullscreen"}
         </button>
