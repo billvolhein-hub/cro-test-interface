@@ -351,78 +351,114 @@ function exportSerpCSV(keywords, domainName) {
 // ── Bubble / Scatter Chart ────────────────────────────────────────────────────
 const BUBBLE_COLORS = ["#F59E0B","#EF4444","#8B5CF6","#10B981","#3B82F6","#F97316","#EC4899","#06B6D4","#84CC16","#A78BFA"];
 
-function BubbleChart({ competitors, targetDomain }) {
-  const [hovered, setHovered] = useState(null);
+function BubbleChart({ competitors, target }) {
+  const [hovered, setHovered] = useState(null); // "t" = target, number = competitor index
   if (!competitors?.length) return null;
 
   const W = 560, H = 220, PAD = { t: 28, r: 20, b: 36, l: 56 };
+  const TARGET_COLOR = "#2563EB";
 
-  const maxTraffic = Math.max(...competitors.map(c => c.traffic ?? 0), 1);
-  const maxValue   = Math.max(...competitors.map(c => c.value ?? 0), 1);
-  const maxPages   = Math.max(...competitors.map(c => c.pages ?? 0), 1);
+  const allTraffic = [...competitors.map(c => c.traffic ?? 0), target?.traffic ?? 0];
+  const allValue   = [...competitors.map(c => c.value   ?? 0), target?.value   ?? 0];
+  const allPages   = [...competitors.map(c => c.pages   ?? 0), target?.pages   ?? 0];
+
+  const maxTraffic = Math.max(...allTraffic, 1);
+  const maxValue   = Math.max(...allValue,   1);
+  const maxPages   = Math.max(...allPages,   1);
   const MAX_R = 36, MIN_R = 6;
 
-  const toX = v => PAD.l + (v / maxValue)  * (W - PAD.l - PAD.r);
+  const toX = v => PAD.l + (v / maxValue)   * (W - PAD.l - PAD.r);
   const toY = v => PAD.t + (1 - v / maxTraffic) * (H - PAD.t - PAD.b);
   const toR = p => MIN_R + Math.sqrt(p / maxPages) * (MAX_R - MIN_R);
 
   const fmtK = n => n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${n}`;
   const fmtT = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n);
 
-  // Y ticks
   const yTicks = [0, maxTraffic / 2, maxTraffic].map(v => ({ v, y: toY(v) }));
-  // X ticks
   const xTicks = [0, maxValue / 4, maxValue / 2, (3 * maxValue) / 4, maxValue].map(v => ({ v, x: toX(v) }));
 
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
-      onMouseLeave={() => setHovered(null)}>
-      {/* Grid */}
-      {yTicks.map(({ v, y }, i) => (
-        <g key={i}>
-          <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke={BORDER} strokeWidth="0.5" strokeDasharray="3,3" />
-          <text x={PAD.l - 5} y={y + 3.5} textAnchor="end" fontSize="7.5" fill={MUTED}>{fmtT(v)}</text>
-        </g>
-      ))}
-      {xTicks.map(({ v, x }, i) => (
-        <text key={i} x={x} y={H - PAD.b + 11} textAnchor="middle" fontSize="7.5" fill={MUTED}>{fmtK(v)}</text>
-      ))}
-      {/* Axis labels */}
-      <text x={PAD.l - 40} y={(PAD.t + H - PAD.b) / 2} textAnchor="middle" fontSize="7.5" fill={MUTED}
-        transform={`rotate(-90, ${PAD.l - 40}, ${(PAD.t + H - PAD.b) / 2})`}>Organic traffic</text>
-      <text x={(PAD.l + W - PAD.r) / 2} y={H - 2} textAnchor="middle" fontSize="7.5" fill={MUTED}>Organic traffic value</text>
-      {/* Hint */}
-      <text x={(PAD.l + W - PAD.r) / 2} y={PAD.t - 10} textAnchor="middle" fontSize="7.5" fill={MUTED} fontStyle="italic">Circle size = Organic pages</text>
+  const renderTooltip = (cx, cy, r, lines) => {
+    const TW = Math.max(...lines.map(l => l.length * 5.8)) + 20;
+    const TH = lines.length * 14 + 10;
+    const tx = Math.min(Math.max(cx - TW / 2, PAD.l), W - PAD.r - TW);
+    const ty = Math.max(cy - r - TH - 6, PAD.t);
+    return (
+      <g pointerEvents="none">
+        <rect x={tx} y={ty} width={TW} height={TH} rx="5" fill="#1E293B" opacity="0.93" />
+        {lines.map((line, li) => (
+          <text key={li} x={tx + 10} y={ty + 14 + li * 14} fontSize="9" fill={li === 0 ? "#fff" : "#CBD5E1"} fontWeight={li === 0 ? "700" : "400"}>{line}</text>
+        ))}
+      </g>
+    );
+  };
 
-      {/* Bubbles */}
-      {competitors.map((c, i) => {
-        const cx = toX(c.value ?? 0);
-        const cy = toY(c.traffic ?? 0);
-        const r  = toR(c.pages ?? 0);
-        const color = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
-        const isHov = hovered === i;
-        return (
-          <g key={i} style={{ cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
-            <circle cx={cx} cy={cy} r={r} fill={color} opacity={isHov ? 0.9 : 0.75} stroke={isHov ? color : "none"} strokeWidth="2" />
-            {isHov && (() => {
-              const lines = [c.competitor_domain ?? c.domain, `Traffic: ${fmtT(c.traffic ?? 0)}`, `Value: ${fmtK(c.value ?? 0)}`, `Pages: ${(c.pages ?? 0).toLocaleString()}`];
-              const TW = Math.max(...lines.map(l => l.length * 5.8)) + 20;
-              const TH = lines.length * 14 + 10;
-              const tx = Math.min(Math.max(cx - TW / 2, PAD.l), W - PAD.r - TW);
-              const ty = Math.max(cy - r - TH - 6, PAD.t);
-              return (
-                <g pointerEvents="none">
-                  <rect x={tx} y={ty} width={TW} height={TH} rx="5" fill="#1E293B" opacity="0.93" />
-                  {lines.map((line, li) => (
-                    <text key={li} x={tx + 10} y={ty + 14 + li * 14} fontSize="9" fill={li === 0 ? "#fff" : "#CBD5E1"} fontWeight={li === 0 ? "700" : "400"}>{line}</text>
-                  ))}
-                </g>
-              );
-            })()}
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
+        onMouseLeave={() => setHovered(null)}>
+        {/* Grid */}
+        {yTicks.map(({ v, y }, i) => (
+          <g key={i}>
+            <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke={BORDER} strokeWidth="0.5" strokeDasharray="3,3" />
+            <text x={PAD.l - 5} y={y + 3.5} textAnchor="end" fontSize="7.5" fill={MUTED}>{fmtT(v)}</text>
           </g>
-        );
-      })}
-    </svg>
+        ))}
+        {xTicks.map(({ v, x }, i) => (
+          <text key={i} x={x} y={H - PAD.b + 11} textAnchor="middle" fontSize="7.5" fill={MUTED}>{fmtK(v)}</text>
+        ))}
+        <text x={PAD.l - 40} y={(PAD.t + H - PAD.b) / 2} textAnchor="middle" fontSize="7.5" fill={MUTED}
+          transform={`rotate(-90, ${PAD.l - 40}, ${(PAD.t + H - PAD.b) / 2})`}>Organic traffic</text>
+        <text x={(PAD.l + W - PAD.r) / 2} y={H - 2} textAnchor="middle" fontSize="7.5" fill={MUTED}>Organic traffic value</text>
+        <text x={(PAD.l + W - PAD.r) / 2} y={PAD.t - 10} textAnchor="middle" fontSize="7.5" fill={MUTED} fontStyle="italic">Circle size = Organic pages</text>
+
+        {/* Competitor bubbles */}
+        {competitors.map((c, i) => {
+          const cx = toX(c.value ?? 0);
+          const cy = toY(c.traffic ?? 0);
+          const r  = toR(c.pages ?? 0);
+          const color = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
+          const isHov = hovered === i;
+          return (
+            <g key={i} style={{ cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
+              <circle cx={cx} cy={cy} r={r} fill={color} opacity={isHov ? 0.9 : 0.72} stroke={isHov ? color : "none"} strokeWidth="2" />
+              {isHov && renderTooltip(cx, cy, r, [c.competitor_domain ?? c.domain, `Traffic: ${fmtT(c.traffic ?? 0)}`, `Value: ${fmtK(c.value ?? 0)}`, `Pages: ${(c.pages ?? 0).toLocaleString()}`])}
+            </g>
+          );
+        })}
+
+        {/* Target bubble — rendered last so it sits on top */}
+        {target && (() => {
+          const cx = toX(target.value ?? 0);
+          const cy = toY(target.traffic ?? 0);
+          const r  = toR(target.pages ?? 0);
+          const isHov = hovered === "t";
+          return (
+            <g style={{ cursor: "pointer" }} onMouseEnter={() => setHovered("t")} onMouseLeave={() => setHovered(null)}>
+              <circle cx={cx} cy={cy} r={r} fill="#fff" stroke={TARGET_COLOR} strokeWidth="2.5" opacity="1" />
+              <circle cx={cx} cy={cy} r={r * 0.45} fill={TARGET_COLOR} opacity="0.9" />
+              {isHov && renderTooltip(cx, cy, r, [`${target.domain} (target)`, `Traffic: ${fmtT(target.traffic ?? 0)}`, `Value: ${fmtK(target.value ?? 0)}`, `Pages: ${target.pages.toLocaleString()}`])}
+            </g>
+          );
+        })()}
+      </svg>
+
+      {/* Legend */}
+      {target && (
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8, fontSize: 10, color: MUTED }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <circle cx="7" cy="7" r="6" fill="#fff" stroke={TARGET_COLOR} strokeWidth="2" />
+              <circle cx="7" cy="7" r="2.5" fill={TARGET_COLOR} />
+            </svg>
+            <strong style={{ color: TEXT }}>{target.domain}</strong> — target
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill={BUBBLE_COLORS[0]} opacity="0.75" /></svg>
+            competitors
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1216,7 +1252,14 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                 <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>Top Organic Competitors</div>
                 <div style={{ fontSize: 11, color: MUTED, marginBottom: 16 }}>Domains competing for the same organic keywords. Circle size = organic pages.</div>
 
-                <BubbleChart competitors={comps} targetDomain={domain} />
+                {(() => {
+                  const serpKws = data?.serp?.keywords ?? [];
+                  const targetTraffic = serpKws.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
+                  const targetValue   = serpKws.reduce((s, k) => s + Math.round((k.cpc ?? 0) * (k.sum_traffic ?? 0)), 0);
+                  const targetPages   = new Set(serpKws.map(k => k.best_position_url).filter(Boolean)).size;
+                  const targetBubble  = { domain, traffic: targetTraffic, value: targetValue, pages: targetPages };
+                  return <BubbleChart competitors={comps} target={targetBubble} />;
+                })()}
 
                 {/* Table */}
                 <div style={{ marginTop: 20, overflowX: "auto" }}>
