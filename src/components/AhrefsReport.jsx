@@ -454,7 +454,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
   const [data,           setData]           = useState(savedData?.data   || null);
   const [errors,         setErrors]         = useState(savedData?.errors || {});
   const [open,           setOpen]           = useState(false);
-  const [activeFeatures, setActiveFeatures] = useState(new Set(["people_also_ask", "featured_snippet", "image_pack", "video"]));
+  const [activeFeatures, setActiveFeatures] = useState(new Set(["featured_snippet", "ai_overview", "sitelinks"]));
   const onSaveRef = useRef(onSave);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
 
@@ -941,6 +941,8 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                   trend.forEach(month => Object.keys(month.features ?? {}).forEach(f => allFeaturesInTrend.add(f)));
 
                   // Deduplicate aliases (ai_overview / ai_overviews, twitter / x_twitter, etc.)
+                  const labelForKey = k => SERP_META[k]?.label ?? k;
+                  const activeLabels = new Set([...activeFeatures].map(labelForKey));
                   const seen = new Set();
                   const trendSeries = [...allFeaturesInTrend]
                     .filter(f => {
@@ -957,14 +959,20 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       icon:   SERP_META[f].icon,
                       bg:     SERP_META[f].bg,
                       border: SERP_META[f].border,
-                      active: activeFeatures.has(f),
+                      active: activeLabels.has(SERP_META[f].label),
                       total:  trend.reduce((s, m) => s + (m.features[f] ?? 0), 0),
                     }))
                     .sort((a, b) => b.total - a.total);
 
                   const toggleFeature = key => setActiveFeatures(prev => {
                     const next = new Set(prev);
-                    next.has(key) ? next.delete(key) : next.add(key);
+                    const label = labelForKey(key);
+                    const isOn = [...prev].some(k => labelForKey(k) === label);
+                    if (isOn) {
+                      [...next].forEach(k => { if (labelForKey(k) === label) next.delete(k); });
+                    } else {
+                      next.add(key);
+                    }
                     return next;
                   });
 
