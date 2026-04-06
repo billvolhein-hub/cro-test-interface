@@ -183,7 +183,82 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
       <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
         onChange={(e) => handleMassImport(e.target.files[0])} />
 
-      <div style={{ padding: isMobile ? "16px 16px 28px" : "28px 28px 36px", overflowX: "hidden" }}>
+      {/* ── Agency Overview ─────────────────────────────────────────────────── */}
+      {clients.length > 0 && (() => {
+        const allTests = tests;
+
+        // Testing counts
+        const backlog   = allTests.filter(t => (t.status || "Backlog") === "Backlog").length;
+        const inWork    = allTests.filter(t => ["Under Review", "Promoted to Test"].includes(t.status)).length;
+        const live      = allTests.filter(t => t.status === "Test Running").length;
+        const complete  = allTests.filter(t => t.status === "Test Complete").length;
+        const highPie   = allTests.filter(t => Number(pieScore(t)) >= 6).length;
+
+        // SEO counts (from client crawlReport data)
+        const withSiteReport  = clients.filter(c => c.crawlReport?.domain).length;
+        const withBacklinks   = clients.filter(c => c.crawlReport?.ahrefs).length;
+        const withSEOIssues   = clients.filter(c => c.crawlReport?.issues?.length > 0).length;
+        const totalPagesCrawled = clients.reduce((sum, c) => sum + (c.crawlReport?.pages?.length ?? 0), 0);
+
+        const TestBadge = ({ label, count, color, bg, border }) => (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: isMobile ? "10px 14px" : "12px 20px", minWidth: isMobile ? 64 : 80, gap: 4 }}>
+            <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 800, color, lineHeight: 1 }}>{count}</div>
+            <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color, letterSpacing: 0.8, textTransform: "uppercase", textAlign: "center", lineHeight: 1.3 }}>{label}</div>
+          </div>
+        );
+
+        const SeoBadge = ({ label, count, total, color, bg, border, icon }) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: isMobile ? "10px 14px" : "12px 18px", flex: "1 1 auto" }}>
+            <div style={{ fontSize: isMobile ? 18 : 22, lineHeight: 1 }}>{icon}</div>
+            <div>
+              <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color, lineHeight: 1 }}>
+                {count}
+                {total !== undefined && <span style={{ fontSize: isMobile ? 11 : 13, fontWeight: 500, color: `${color}99`, marginLeft: 4 }}>/ {total}</span>}
+              </div>
+              <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 700, color, letterSpacing: 0.8, textTransform: "uppercase", marginTop: 2 }}>{label}</div>
+            </div>
+          </div>
+        );
+
+        return (
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+
+            {/* Testing row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🧪 Testing</div>
+              <div style={{ flex: 1, height: 1, background: BORDER }} />
+              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{allTests.length} total</div>
+            </div>
+            <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 20 }}>
+              <TestBadge label="Backlog"   count={backlog}  color="#1B3A6B" bg="#EEF2FF" border="#C7D2FE" />
+              <TestBadge label="In Work"   count={inWork}   color="#B45309" bg="#FFFBEB" border="#FDE68A" />
+              <TestBadge label="Live"      count={live}     color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />
+              <TestBadge label="Complete"  count={complete} color="#15803D" bg="#F0FDF4" border="#BBF7D0" />
+              {highPie > 0 && (
+                <TestBadge label="High PIE ★" count={highPie} color="#B45309" bg="#FFFBEB" border="#FDE68A" />
+              )}
+            </div>
+
+            {/* SEO row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔍 SEO</div>
+              <div style={{ flex: 1, height: 1, background: BORDER }} />
+              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clients.length} client{clients.length !== 1 ? "s" : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap" }}>
+              <SeoBadge icon="📊" label="Site Reports"   count={withSiteReport}  total={clients.length} color="#2A8C8C" bg="#F0FAFA" border="#A8D8D8" />
+              <SeoBadge icon="🔗" label="Backlink Intel"  count={withBacklinks}   total={clients.length} color="#6D28D9" bg="#F5F3FF" border="#DDD6FE" />
+              <SeoBadge icon="⚠️" label="Issues Reports"  count={withSEOIssues}   total={clients.length} color="#B45309" bg="#FFFBEB" border="#FDE68A" />
+              {totalPagesCrawled > 0 && (
+                <SeoBadge icon="🗂" label="Pages Crawled"  count={totalPagesCrawled.toLocaleString()} color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />
+              )}
+            </div>
+
+          </div>
+        );
+      })()}
+
+      <div style={{ padding: isMobile ? "0 16px 28px" : "0 28px 36px", overflowX: "hidden" }}>
 
         {/* Client filter bar */}
         <div style={{ marginBottom: 20 }}>
