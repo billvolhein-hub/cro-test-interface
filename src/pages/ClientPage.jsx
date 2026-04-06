@@ -32,15 +32,18 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken, onUpdatePortalPassword }) {
+export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken, onUpdatePortalPassword }) {
   const { id, portalToken } = useParams();
   const navigate = useNavigate();
+  const ap = (path) => `/${agencySlug}${path}`;
   const { isPortal } = usePortal();
   const { isMobile } = useBreakpoint();
   const client = isPortal
     ? clients.find(c => c.portalToken === portalToken)
     : clients.find(c => c.id === Number(id));
   const clientId = client?.id;
+
+  const [activeTab, setActiveTab] = useState("testing");
 
   const brand = mergeBrand(client?.brand);
 
@@ -71,7 +74,7 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
   const logoRef  = useRef(null);
   const bgImgRef = useRef(null);
 
-  if (!client) { navigate("/"); return null; }
+  if (!client) { navigate(agencySlug ? `/${agencySlug}` : "/"); return null; }
 
   const portalUrl = `${window.location.origin}/portal/${client.portalToken}`;
 
@@ -457,199 +460,236 @@ export default function ClientPage({ clients, tests, onUpdateTest, onSaveCrawlRe
           </div>
         )}
 
-        {/* ── Engagement Overview (admin only, collapsible) ── */}
-        {!isPortal && (
-          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 20, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-            <div
-              onClick={() => setEngagementOpen(v => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", cursor: "pointer", background: "#F8FAFC", borderBottom: engagementOpen ? `1px solid ${BORDER}` : "none" }}
-            >
-              <div style={{ width: 20, height: 20, borderRadius: 6, background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                  <rect x="1.5" y="3" width="9" height="6.5" rx="1" stroke="#fff" strokeWidth="1.3"/>
-                  <path d="M4 3V2a2 2 0 0 1 4 0v1" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: 0.5 }}>Engagement Overview</div>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: engagementOpen ? "none" : "rotate(-90deg)", transition: "transform .2s", color: MUTED }}>
-                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            {engagementOpen && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, padding: "16px 18px" }}>
-
-            {/* Portal Link */}
-            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Client Portal Link</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={handleRegenerateToken}
-                  disabled={tokenRegen}
-                  title="Invalidate current link and generate a new one"
-                  style={{ flex: 1, background: "none", color: MUTED, border: `1px solid ${BORDER}`, padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: tokenRegen ? "wait" : "pointer" }}>
-                  {tokenRegen ? "…" : "↺ Reset"}
-                </button>
-                <button
-                  onClick={() => navigator.clipboard.writeText(portalUrl)}
-                  style={{ flex: 1, background: ACCENT, color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                  Copy Link
-                </button>
-              </div>
-            </div>
-
-            {/* Portal Password */}
-            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Portal Password</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ flex: 1, position: "relative" }}>
-                  <input
-                    type={pwVisible ? "text" : "password"}
-                    value={pwDraft !== "" ? pwDraft : (client.portalPassword ?? "")}
-                    onChange={e => setPwDraft(e.target.value)}
-                    placeholder={client.portalPassword ? "••••••••" : "No password"}
-                    style={{ width: "100%", boxSizing: "border-box", padding: "7px 36px 7px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
-                  />
-                  <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 11, padding: 0 }}>
-                    {pwVisible ? "Hide" : "Show"}
-                  </button>
-                </div>
-                <button
-                  disabled={pwSaving}
-                  onClick={async () => { setPwSaving(true); await onUpdatePortalPassword?.(clientId, pwDraft); setPwDraft(""); setPwSaving(false); }}
-                  style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "7px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: pwSaving ? "wait" : "pointer", opacity: pwSaving ? 0.7 : 1 }}>
-                  {pwSaving ? "…" : "Save"}
-                </button>
-                {client.portalPassword && (
-                  <button
-                    onClick={async () => { await onUpdatePortalPassword?.(clientId, ""); setPwDraft(""); }}
-                    style={{ flexShrink: 0, background: "none", color: "#DC2626", border: "1px solid #FECACA", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Testing Calendar Export */}
-            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Testing Calendar Export</div>
-              <button
-                onClick={() => exportTestingCalendar(client.name, clientTests, brand)}
-                style={{ background: "#15803D", color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                ↓ Export .xlsx
-              </button>
-            </div>
-
-          </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Build Report button ── */}
-        {!isPortal && (
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+        {/* ── Horizontal Tabs ── */}
+        <div style={{ display: "flex", gap: 0, borderBottom: `2px solid ${BORDER}`, marginBottom: 28 }}>
+          {[
+            { key: "testing", label: "Testing", icon: "🧪" },
+            ...(!isPortal ? [{ key: "seo", label: "SEO", icon: "🔍" }] : []),
+          ].map(tab => (
             <button
-              onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setPendingDomain(""); setModalOpen(true); }}
-              style={{ background: ACCENT, color: "#fff", border: "none", borderRadius: 8, padding: "11px 24px", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              ⚡ Build Site Report
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                padding: isMobile ? "10px 16px" : "12px 24px",
+                fontSize: isMobile ? 13 : 14, fontWeight: 700,
+                fontFamily: "'Inter',sans-serif",
+                color: activeTab === tab.key ? ACCENT : MUTED,
+                borderBottom: activeTab === tab.key ? `2px solid ${ACCENT}` : "2px solid transparent",
+                marginBottom: -2,
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "color .15s",
+              }}
+            >
+              <span style={{ fontSize: isMobile ? 14 : 15 }}>{tab.icon}</span>
+              {tab.label}
             </button>
-            {(crawlDone || issuesDone || ahrefsDone) && (
-              <div style={{ display: "flex", gap: 8 }}>
-                {crawlDone  && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,   background: "#CCFBF1", border: "1px solid #99F6E4", borderRadius: 5, padding: "4px 10px" }}>SEO Internal ✓</span>}
-                {issuesDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #C4B5FD", borderRadius: 5, padding: "4px 10px" }}>SEO Issues ✓</span>}
-                {ahrefsDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#DBEAFE", border: "1px solid #BFDBFE", borderRadius: 5, padding: "4px 10px" }}>Backlinks ✓</span>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Report Builder Modal ── */}
-        {!isPortal && (
-          <ReportBuilderModal
-            ref={modalRef}
-            isOpen={modalOpen}
-            onClose={() => setModalOpen(false)}
-            crawlRef={crawlRef}
-            savedDomain={client.crawlReport?.domain ?? ""}
-            crawlDone={crawlDone}
-            issuesDone={issuesDone}
-            ahrefsDone={ahrefsDone}
-          />
-        )}
-
-        {/* ── Backlink Intelligence ── */}
-        <AhrefsReport
-          ref={ahrefsRef}
-          defaultDomain={client.crawlReport?.domain ?? ""}
-          savedData={client.crawlReport?.ahrefs ?? null}
-          onFetchComplete={() => setAhrefsDone(true)}
-          onSave={(ahrefsData) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ahrefs: ahrefsData })}
-          isPortal={isPortal}
-        />
-
-        {/* ── SEO Report ── */}
-        <CrawlReport
-          ref={crawlRef}
-          clientId={clientId}
-          crawlReport={client.crawlReport}
-          onSave={(report) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ...report })}
-          onDomainExtracted={(domain) => { setPendingDomain(domain); }}
-          onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
-          isPortal={isPortal}
-        />
-
-        {/* ── Client Notes ── */}
-        <ClientNotesFeed
-          tests={clientTests}
-          clients={[client]}
-          clientId={clientId}
-          onUpdateTest={onUpdateTest}
-        />
-
-        {/* ── Pipeline overview ── */}
-        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "18px 22px", marginBottom: 28, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Test Pipeline</div>
-          <div style={{ display: "flex", alignItems: "center" }}>
-            {pipelineGroups.map((p, i) => (
-              <div key={p.label} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-                <div style={{ flex: 1, background: p.bg, border: `1.5px solid ${p.border}`, borderRadius: 8, padding: "10px 14px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: p.color, lineHeight: 1 }}>{p.tests.length}</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: p.color, letterSpacing: 0.8, textTransform: "uppercase", marginTop: 3 }}>{p.label}</div>
-                </div>
-                {i < pipelineGroups.length - 1 && (
-                  <div style={{ fontSize: 16, color: DIM, flexShrink: 0, padding: "0 6px" }}>→</div>
-                )}
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
 
-        {/* Tests grouped by stage — display order: Live, In Work, Backlog, Complete */}
-        {clientTests.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 0", color: MUTED }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No tests yet for {client.name}</div>
-            <div style={{ fontSize: 14 }}>Head back to the home page to create one.</div>
-          </div>
-        ) : (
-          [...pipelineGroups]
-            .sort((a, b) => {
-              const order = ["Live", "In Work", "Backlog", "Complete"];
-              return order.indexOf(a.label) - order.indexOf(b.label);
-            })
-            .filter(p => p.tests.length > 0)
-            .map(p => (
-              <div key={p.label} style={{ marginBottom: 36 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 2, background: p.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 800, color: p.color, letterSpacing: 1.2, textTransform: "uppercase" }}>{p.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: p.color, background: p.bg, border: `1px solid ${p.border}`, borderRadius: 10, padding: "1px 8px" }}>{p.tests.length}</span>
-                  <div style={{ flex: 1, height: 1, background: p.border }} />
+        {/* ══ TESTING TAB ══════════════════════════════════════════════════════ */}
+        {activeTab === "testing" && (
+          <>
+            {/* ── Engagement Overview (admin only, collapsible) ── */}
+            {!isPortal && (
+              <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, marginBottom: 20, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+                <div
+                  onClick={() => setEngagementOpen(v => !v)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", cursor: "pointer", background: "#F8FAFC", borderBottom: engagementOpen ? `1px solid ${BORDER}` : "none" }}
+                >
+                  <div style={{ width: 20, height: 20, borderRadius: 6, background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                      <rect x="1.5" y="3" width="9" height="6.5" rx="1" stroke="#fff" strokeWidth="1.3"/>
+                      <path d="M4 3V2a2 2 0 0 1 4 0v1" stroke="#fff" strokeWidth="1.3" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: 0.5 }}>Engagement Overview</div>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: engagementOpen ? "none" : "rotate(-90deg)", transition: "transform .2s", color: MUTED }}>
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
-                  {p.tests.map(renderTestCard)}
-                </div>
+                {engagementOpen && (
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 14, padding: "16px 18px" }}>
+
+                    {/* Portal Link */}
+                    <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Client Portal Link</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={handleRegenerateToken}
+                          disabled={tokenRegen}
+                          title="Invalidate current link and generate a new one"
+                          style={{ flex: 1, background: "none", color: MUTED, border: `1px solid ${BORDER}`, padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: tokenRegen ? "wait" : "pointer" }}>
+                          {tokenRegen ? "…" : "↺ Reset"}
+                        </button>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(portalUrl)}
+                          style={{ flex: 1, background: ACCENT, color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          Copy Link
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Portal Password */}
+                    <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Portal Password</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ flex: 1, position: "relative" }}>
+                          <input
+                            type={pwVisible ? "text" : "password"}
+                            value={pwDraft !== "" ? pwDraft : (client.portalPassword ?? "")}
+                            onChange={e => setPwDraft(e.target.value)}
+                            placeholder={client.portalPassword ? "••••••••" : "No password"}
+                            style={{ width: "100%", boxSizing: "border-box", padding: "7px 36px 7px 10px", borderRadius: 6, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, background: "#fff", outline: "none" }}
+                          />
+                          <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: MUTED, fontSize: 11, padding: 0 }}>
+                            {pwVisible ? "Hide" : "Show"}
+                          </button>
+                        </div>
+                        <button
+                          disabled={pwSaving}
+                          onClick={async () => { setPwSaving(true); await onUpdatePortalPassword?.(clientId, pwDraft); setPwDraft(""); setPwSaving(false); }}
+                          style={{ flexShrink: 0, background: ACCENT, color: "#fff", border: "none", padding: "7px 12px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: pwSaving ? "wait" : "pointer", opacity: pwSaving ? 0.7 : 1 }}>
+                          {pwSaving ? "…" : "Save"}
+                        </button>
+                        {client.portalPassword && (
+                          <button
+                            onClick={async () => { await onUpdatePortalPassword?.(clientId, ""); setPwDraft(""); }}
+                            style={{ flexShrink: 0, background: "none", color: "#DC2626", border: "1px solid #FECACA", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Testing Calendar Export */}
+                    <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Testing Calendar Export</div>
+                      <button
+                        onClick={() => exportTestingCalendar(client.name, clientTests, brand)}
+                        style={{ background: "#15803D", color: "#fff", border: "none", padding: "7px 0", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        ↓ Export .xlsx
+                      </button>
+                    </div>
+
+                  </div>
+                )}
               </div>
-            ))
+            )}
+
+            {/* ── Client Notes ── */}
+            <ClientNotesFeed
+              tests={clientTests}
+              clients={[client]}
+              clientId={clientId}
+              onUpdateTest={onUpdateTest}
+            />
+
+            {/* ── Pipeline overview ── */}
+            <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "18px 22px", marginBottom: 28, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Test Pipeline</div>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {pipelineGroups.map((p, i) => (
+                  <div key={p.label} style={{ display: "flex", alignItems: "center", flex: 1 }}>
+                    <div style={{ flex: 1, background: p.bg, border: `1.5px solid ${p.border}`, borderRadius: 8, padding: "10px 14px", textAlign: "center" }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: p.color, lineHeight: 1 }}>{p.tests.length}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: p.color, letterSpacing: 0.8, textTransform: "uppercase", marginTop: 3 }}>{p.label}</div>
+                    </div>
+                    {i < pipelineGroups.length - 1 && (
+                      <div style={{ fontSize: 16, color: DIM, flexShrink: 0, padding: "0 6px" }}>→</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tests grouped by stage */}
+            {clientTests.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "80px 0", color: MUTED }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No tests yet for {client.name}</div>
+                <div style={{ fontSize: 14 }}>Head back to the home page to create one.</div>
+              </div>
+            ) : (
+              [...pipelineGroups]
+                .sort((a, b) => {
+                  const order = ["Live", "In Work", "Backlog", "Complete"];
+                  return order.indexOf(a.label) - order.indexOf(b.label);
+                })
+                .filter(p => p.tests.length > 0)
+                .map(p => (
+                  <div key={p.label} style={{ marginBottom: 36 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 800, color: p.color, letterSpacing: 1.2, textTransform: "uppercase" }}>{p.label}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: p.color, background: p.bg, border: `1px solid ${p.border}`, borderRadius: 10, padding: "1px 8px" }}>{p.tests.length}</span>
+                      <div style={{ flex: 1, height: 1, background: p.border }} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+                      {p.tests.map(renderTestCard)}
+                    </div>
+                  </div>
+                ))
+            )}
+          </>
+        )}
+
+        {/* ══ SEO TAB ══════════════════════════════════════════════════════════ */}
+        {activeTab === "seo" && (
+          <>
+            {/* ── Build Site Report ── */}
+            {!isPortal && (
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+                <button
+                  onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setPendingDomain(""); setModalOpen(true); }}
+                  style={{ background: ACCENT, color: "#fff", border: "none", borderRadius: 8, padding: "11px 24px", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  ⚡ Build Site Report
+                </button>
+                {(crawlDone || issuesDone || ahrefsDone) && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {crawlDone  && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,     background: "#CCFBF1", border: "1px solid #99F6E4", borderRadius: 5, padding: "4px 10px" }}>SEO Internal ✓</span>}
+                    {issuesDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #C4B5FD", borderRadius: 5, padding: "4px 10px" }}>SEO Issues ✓</span>}
+                    {ahrefsDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#DBEAFE", border: "1px solid #BFDBFE", borderRadius: 5, padding: "4px 10px" }}>Backlinks ✓</span>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Report Builder Modal ── */}
+            {!isPortal && (
+              <ReportBuilderModal
+                ref={modalRef}
+                isOpen={modalOpen}
+                onClose={() => setModalOpen(false)}
+                crawlRef={crawlRef}
+                savedDomain={client.crawlReport?.domain ?? ""}
+                crawlDone={crawlDone}
+                issuesDone={issuesDone}
+                ahrefsDone={ahrefsDone}
+              />
+            )}
+
+            {/* ── Backlink Intelligence ── */}
+            <AhrefsReport
+              ref={ahrefsRef}
+              defaultDomain={client.crawlReport?.domain ?? ""}
+              savedData={client.crawlReport?.ahrefs ?? null}
+              onFetchComplete={() => setAhrefsDone(true)}
+              onSave={(ahrefsData) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ahrefs: ahrefsData })}
+              isPortal={isPortal}
+            />
+
+            {/* ── SEO Report ── */}
+            <CrawlReport
+              ref={crawlRef}
+              clientId={clientId}
+              crawlReport={client.crawlReport}
+              onSave={(report) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ...report })}
+              onDomainExtracted={(domain) => { setPendingDomain(domain); }}
+              onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
+              isPortal={isPortal}
+            />
+          </>
         )}
       </div>
     </div>

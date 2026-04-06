@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "re
 import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
-  getBacklinksHistory, getRefdomains, getAnchors,
+  getBacklinksHistory, getRefdomains, getAnchors, getTopBacklinks,
 } from "../lib/ahrefs";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -327,6 +327,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("blhistory",  () => getBacklinksHistory(target)),
       safe("refs",       () => getRefdomains(target)),
       safe("anchors",    () => getAnchors(target)),
+      safe("backlinks",  () => getTopBacklinks(target)),
     ]);
 
     const merged = Object.assign({}, ...results);

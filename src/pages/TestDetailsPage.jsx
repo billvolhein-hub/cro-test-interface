@@ -19,7 +19,7 @@ import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePd
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
-export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
+export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -105,7 +105,8 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
     return () => { document.body.style.overflow = ""; };
   }, [svgPreviewOpen]);
 
-  if (!test) { navigate("/"); return null; }
+  const ap = (path) => `/${agencySlug}${path}`;
+  if (!test) { navigate(agencySlug ? `/${agencySlug}` : "/"); return null; }
 
   const score = Number(pieScore(test));
 
@@ -472,7 +473,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         }
         return <AppHeader right={
           client ? (
-            <button onClick={() => navigate(`/clients/${client.id}`)}
+            <button onClick={() => navigate(ap(`/clients/${client.id}`))}
               style={{ background: "none", border: `1.5px solid ${BORDER}`, color: MUTED, padding: "7px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               ← {client.name}
             </button>
@@ -484,7 +485,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
         {/* Page title row */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 16 }}>
           <div
-            onClick={() => !isPortal && navigate(`/tests/${id}/edit`)}
+            onClick={() => !isPortal && navigate(ap(`/tests/${id}/edit`))}
             title={isPortal ? undefined : "Edit definition"}
             style={{ cursor: isPortal ? "default" : "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -894,7 +895,7 @@ export default function TestDetailsPage({ tests, screenshotsMap, setScreenshotsM
               {confirmDelete ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600, flex: 1 }}>This cannot be undone.</span>
-                  <button onClick={async () => { await onDeleteTest(Number(id)); navigate("/"); }}
+                  <button onClick={async () => { await onDeleteTest(Number(id)); navigate(agencySlug ? `/${agencySlug}` : "/"); }}
                     style={{ background: "#DC2626", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                     Confirm Delete
                   </button>

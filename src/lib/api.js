@@ -2,25 +2,27 @@ import { supabase } from "./supabase";
 
 // ── Clients ──────────────────────────────────────────────────────────────────
 
-export async function fetchClients() {
-  const { data, error } = await supabase.from("clients").select("*").order("created_at");
+export async function fetchClients(agencyId) {
+  let query = supabase.from("clients").select("*").order("created_at");
+  if (agencyId) query = query.eq("agency_id", agencyId);
+  const { data, error } = await query;
   if (error) throw error;
   return data.map(rowToClient);
 }
 
-export async function createClient(name) {
+export async function createClient(name, agencyId) {
   const { data, error } = await supabase
     .from("clients")
-    .insert({ name: name.trim(), created_at: Date.now() })
+    .insert({ name: name.trim(), created_at: Date.now(), agency_id: agencyId ?? null })
     .select()
     .single();
   if (error) throw error;
   return rowToClient(data);
 }
 
-export async function createClients(names) {
+export async function createClients(names, agencyId) {
   const now = Date.now();
-  const rows = names.map((name, i) => ({ name: name.trim(), created_at: now + i }));
+  const rows = names.map((name, i) => ({ name: name.trim(), created_at: now + i, agency_id: agencyId ?? null }));
   const { data, error } = await supabase.from("clients").insert(rows).select();
   if (error) throw error;
   return data.map(rowToClient);
@@ -63,7 +65,7 @@ export async function regeneratePortalToken(id) {
 }
 
 function rowToClient(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null, portalToken: row.portal_token ?? null, portalPassword: row.portal_password ?? null };
+  return { id: row.id, name: row.name, createdAt: row.created_at, agencyId: row.agency_id ?? null, brand: row.brand ?? {}, crawlReport: row.crawl_report ?? null, portalToken: row.portal_token ?? null, portalPassword: row.portal_password ?? null };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

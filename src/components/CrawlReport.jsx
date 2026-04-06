@@ -40,7 +40,12 @@ function parseCrawlCSV(text) {
 
 function parseNodes(allRows, col) {
   const MAX = 5000;
-  return allRows.slice(0, MAX).map(r => {
+  // Only HTML pages — exclude images, PDFs, JS, CSS, fonts, etc.
+  const pageRows = allRows.filter(r => {
+    const ct = col(r, "Content Type");
+    return !ct || ct.startsWith("text/html");
+  });
+  return pageRows.slice(0, MAX).map(r => {
     let status = col(r, "Status Code");
     // Screaming Frog stores 0 for redirect URLs it didn't re-crawl.
     // Recover the real code from "Indexability Status" (e.g. "301 Redirect").
@@ -787,7 +792,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
             style={{ fontSize: 10, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif", marginRight: 6, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}
           >
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="2" stroke="#15803D" strokeWidth="1.4"/><circle cx="3" cy="12" r="2" stroke="#15803D" strokeWidth="1.4"/><circle cx="13" cy="12" r="2" stroke="#15803D" strokeWidth="1.4"/><path d="M8 5v3M8 8l-4 2M8 8l4 2" stroke="#15803D" strokeWidth="1.2" strokeLinecap="round"/></svg>
-            Site Tree
+            Network Visualization
           </button>
         )}
         {hasData && !isPortal && (
@@ -847,7 +852,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
       )}
 
       {treeOpen && treeNodes?.length > 0 && (
-        <DirectoryTreeModal nodes={treeNodes} onClose={() => setTreeOpen(false)} />
+        <DirectoryTreeModal nodes={treeNodes} ahrefsData={crawlReport?.ahrefs} onClose={() => setTreeOpen(false)} />
       )}
     </div>
   );

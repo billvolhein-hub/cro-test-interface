@@ -12,8 +12,9 @@ const statusStyle = (val) => TEST_STATUSES.find(s => s.value === val) || TEST_ST
 
 // Defined inside component (see below) so it captures live `clients` from scope.
 
-export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
+export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
   const navigate = useNavigate();
+  const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile, isTablet } = useBreakpoint();
   const [confirmDelete,    setConfirmDelete]    = useState(null);
   const [importResult,     setImportResult]     = useState(null);
@@ -82,7 +83,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
   const handleNew = async (clientId) => {
     const t = { ...blankTest(), clientId: clientId ?? null };
     const saved = await onCreateTest(t);
-    navigate(`/tests/${saved.id}/edit`);
+    navigate(ap(`/tests/${saved.id}/edit`));
   };
 
   const handleIdeationSelect = async (testData, screenshots) => {
@@ -92,7 +93,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
       await onSaveScreenshots(saved.id, screenshots);
     }
     setIdeationOpen(false);
-    navigate(`/tests/${saved.id}?template=1`);
+    navigate(ap(`/tests/${saved.id}?template=1`));
   };
 
   const handleMassImport = (file) => {
@@ -194,7 +195,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                   {c.name}
                 </button>
                 {c.id !== "all" && (
-                  <button onClick={() => navigate(`/clients/${c.id}`)} title={`${c.name} portfolio`}
+                  <button onClick={() => navigate(ap(`/clients/${c.id}`))} title={`${c.name} portfolio`}
                     style={{ padding: isMobile ? "5px 8px" : "6px 10px", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", borderLeft: `1px solid ${activeClientId === c.id ? "rgba(255,255,255,.3)" : BORDER}`, background: activeClientId === c.id ? "#142d54" : "#F7F8FA", color: activeClientId === c.id ? "rgba(255,255,255,.8)" : MUTED, transition: "all .15s" }}>
                     ↗
                   </button>
@@ -255,7 +256,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             </div>
           ) : (
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-              <button onClick={() => navigate(`/clients/${activeClientId}`)}
+              <button onClick={() => navigate(ap(`/clients/${activeClientId}`))}
                 style={{ background: ACCENT, color: "#fff", border: "none", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", flex: isMobile ? 1 : undefined }}>
                 Portfolio →
               </button>
@@ -315,7 +316,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
             const isSelected = selectedIds.has(t.id);
             const isHighPie = s >= 6.0;
             const isDragging = draggingId === t.id;
-            const isExpanded = !expandedCards.has(t.id);
+            const isExpanded = expandedCards.has(t.id);
             return (
               <div key={t.id}
                 draggable
@@ -324,7 +325,7 @@ export default function HomePage({ tests, onCreateTest, onCreateTests, onDeleteT
                 onDragOver={(e) => e.preventDefault()}
                 className={`test-card${isSelected ? " selected" : ""}${isHighPie ? " high-pie" : ""}`}
                 style={{ opacity: isDragging ? 0.4 : 1, cursor: "grab", padding: "10px 12px" }}
-                onClick={() => selectedIds.size > 0 ? toggleSelect(t.id, { stopPropagation: () => {} }) : navigate(`/tests/${t.id}`)}>
+                onClick={() => selectedIds.size > 0 ? toggleSelect(t.id, { stopPropagation: () => {} }) : navigate(ap(`/tests/${t.id}`))}>
 
                 {/* Always-visible collapsed row */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

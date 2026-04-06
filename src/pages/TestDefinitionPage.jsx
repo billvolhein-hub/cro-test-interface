@@ -8,9 +8,10 @@ import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, makePdfFromSvg,
 import { TEST_TYPES, TEST_STATUSES, DEFAULT_STATUS, METRICS, AUDIENCES, PIE_CRITERIA, SCREENSHOT_ZONES, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
-export default function TestDefinitionPage({ tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onReplaceTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients, onCreateClient }) {
+export default function TestDefinitionPage({ agencySlug = "", tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onReplaceTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients, onCreateClient }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile, isTablet } = useBreakpoint();
   const testId = Number(id);
   const test = tests.find(t => t.id === testId);
@@ -54,7 +55,7 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
     }
   }, [screenshotsMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!test) { navigate("/"); return null; }
+  if (!test) { navigate(agencySlug ? `/${agencySlug}` : "/"); return null; }
 
   const score = Number(pieScore(test));
   const update = (field, value) => onUpdateTest(testId, field, value);
@@ -193,12 +194,12 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
           {(() => {
             const client = clients?.find(c => c.id === test.clientId);
             return client ? (
-              <button className="back-btn" onClick={() => navigate(`/clients/${client.id}`)}>
+              <button className="back-btn" onClick={() => navigate(ap(`/clients/${client.id}`))}>
                 ← {client.name}
               </button>
             ) : null;
           })()}
-          <button className="back-btn" onClick={() => navigate(`/tests/${id}`)}>
+          <button className="back-btn" onClick={() => navigate(ap(`/tests/${id}`))}>
             ← Test Details
           </button>
         </div>
@@ -430,7 +431,7 @@ export default function TestDefinitionPage({ tests, screenshotsMap, setScreensho
             {confirmDelete ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600, flex: 1 }}>This cannot be undone.</span>
-                <button onClick={async () => { await onDeleteTest(testId); navigate("/"); }}
+                <button onClick={async () => { await onDeleteTest(testId); navigate(agencySlug ? `/${agencySlug}` : "/"); }}
                   style={{ background: "#DC2626", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                   Confirm Delete
                 </button>

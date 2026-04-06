@@ -1,304 +1,161 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { fetchAgencies } from "./lib/agencies";
+import { fetchClients, fetchTests } from "./lib/api";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
-import {
-  fetchClients, createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient, regeneratePortalToken, updateClientPortalPassword,
-  fetchTests, createTest, createTests, updateTestField, replaceTest, deleteTest,
-} from "./lib/api";
-import HomePage from "./pages/HomePage";
+import { SuperAdminGate, PortalGate } from "./components/PasswordGate";
+import SuperAdminPage  from "./pages/SuperAdminPage";
+import AgencyWrapper   from "./components/AgencyWrapper";
 import TestDetailsPage from "./pages/TestDetailsPage";
-import TestDefinitionPage from "./pages/TestDefinitionPage";
-import ClientPage from "./pages/ClientPage";
+import ClientPage      from "./pages/ClientPage";
 import { PortalContext } from "./context/PortalContext";
-import { AdminGate, PortalGate } from "./components/PasswordGate";
+import { ACCENT, BG, MUTED } from "./lib/constants";
 
-// Reads portalToken from URL params, finds the client, applies PortalGate + PortalContext
-function PortalTokenGate({ clients, children }) {
+// ── Portal wrapper — looks up client by token, applies gate + context ─────────
+function PortalTokenGate({ clients, screenshotsMap, setScreenshotsMap, onUpdateTest, onSaveScreenshot, onClearScreenshot, onUpdateClientBrand }) {
   const { portalToken } = useParams();
   const client = clients.find(c => c.portalToken === portalToken);
   return (
     <PortalGate client={client}>
       <PortalContext.Provider value={{ isPortal: true }}>
-        {children}
+        {/* children rendered by the Route's element */}
+        <ClientPage
+          clients={clients}
+          tests={[]}  // portal fetches its own
+          onUpdateClientBrand={onUpdateClientBrand}
+        />
       </PortalContext.Provider>
     </PortalGate>
   );
 }
 
-export default function App() {
-  const [tests, setTests] = useState([]);
-  const [clients, setClients] = useState([]);
+// ── Portal shell — fetches all clients (needed to resolve portalToken) ────────
+function PortalShell({ children }) {
+  const [clients, setClients]           = useState([]);
+  const [tests,   setTests]             = useState([]);
   const [screenshotsMap, setScreenshotsMap] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
 
-  // Load from Supabase on mount, migrating localStorage data if Supabase is empty
   useEffect(() => {
-    (async () => {
-      try {
-        let [remoteClients, remoteTests] = await Promise.all([fetchClients(), fetchTests()]);
-
-        if (remoteClients.length === 0 && remoteTests.length === 0) {
-          // Attempt one-time migration from localStorage
-          const rawClients = localStorage.getItem("hypothesis-builder-clients");
-          const rawTests   = localStorage.getItem("hypothesis-builder-tests");
-          const lsClients  = rawClients ? JSON.parse(rawClients) : [];
-          const lsTests    = rawTests   ? JSON.parse(rawTests)   : [];
-
-          if (lsClients.length > 0 || lsTests.length > 0) {
-            // Insert clients, capture old→new ID mapping
-            const idMap = {};
-            if (lsClients.length > 0) {
-              const inserted = await createClients(lsClients.map(c => c.name));
-              lsClients.forEach((old, i) => { idMap[old.id] = inserted[i].id; });
-              remoteClients = inserted;
-            }
-            // Remap clientId on each test then insert
-            if (lsTests.length > 0) {
-              const mapped = lsTests.map(t => ({
-                ...t,
-                clientId: idMap[t.clientId] ?? remoteClients[0]?.id ?? null,
-              }));
-              remoteTests = await createTests(mapped);
-            }
-            // Clear localStorage so migration doesn't repeat
-            localStorage.removeItem("hypothesis-builder-clients");
-            localStorage.removeItem("hypothesis-builder-tests");
-          }
-        }
-
-        setClients(remoteClients);
-        setTests(remoteTests);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    Promise.all([fetchClients(), fetchTests()]).then(([c, t]) => {
+      setClients(c);
+      setTests(t);
+      setLoading(false);
+    });
   }, []);
 
-  // ── Clients ──────────────────────────────────────────────────────────────
-  const onCreateClient = async (name) => {
-    const client = await createClient(name);
-    setClients((prev) => [...prev, client]);
-    return client;
-  };
+  if (loading) return <Spinner />;
+  return children({ clients, tests, screenshotsMap, setScreenshotsMap });
+}
 
-  const onCreateClients = async (names) => {
-    const newClients = await createClients(names);
-    setClients((prev) => [...prev, ...newClients]);
-    return newClients;
-  };
+// ── Super admin shell — loads agencies ───────────────────────────────────────
+function SuperAdminShell() {
+  const [agencies, setAgencies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
 
-  const onUpdateClient = async (id, name) => {
-    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, name: name.trim() } : c)));
-    await updateClient(id, name);
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    fetchAgencies()
+      .then(a => { setAgencies(a); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
   };
+  useEffect(() => { load(); }, []);
 
-  const onUpdateClientBrand = async (id, brand) => {
-    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, brand } : c)));
-    await updateClientBrand(id, brand);
-  };
-
-  const onSaveCrawlReport = async (id, crawlReport) => {
-    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, crawlReport } : c)));
-    await updateClientCrawlReport(id, crawlReport);
-  };
-
-  const onRegeneratePortalToken = (id, portalToken) => {
-    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, portalToken } : c)));
-  };
-
-  const onUpdatePortalPassword = async (id, password) => {
-    setClients((prev) => prev.map((c) => (c.id === id ? { ...c, portalPassword: password || null } : c)));
-    await updateClientPortalPassword(id, password);
-  };
-
-  const onDeleteClient = async (id) => {
-    const remaining = clients.filter((c) => c.id !== id);
-    const fallbackId = remaining[0]?.id ?? null;
-    setClients(remaining);
-    setTests((prev) => prev.map((t) =>
-      t.clientId === id ? { ...t, clientId: fallbackId, updatedAt: Date.now() } : t
-    ));
-    await deleteClient(id);
-    // Reassign affected tests in DB
-    const affected = tests.filter((t) => t.clientId === id);
-    await Promise.all(affected.map((t) => updateTestField(t.id, "clientId", fallbackId)));
-  };
-
-  // ── Tests ─────────────────────────────────────────────────────────────────
-  const onCreateTest = async (t) => {
-    const saved = await createTest(t);
-    setTests((prev) => [...prev, saved]);
-    return saved;
-  };
-
-  const onCreateTests = async (arr) => {
-    const saved = await createTests(arr);
-    setTests((prev) => [...prev, ...saved]);
-    return saved;
-  };
-
-  const onUpdateTest = async (testId, field, value) => {
-    setTests((prev) => prev.map((t) =>
-      t.id === testId ? { ...t, [field]: value, updatedAt: Date.now() } : t
-    ));
-    await updateTestField(testId, field, value);
-  };
-
-  const onReplaceTest = async (updated) => {
-    const withTs = { ...updated, updatedAt: Date.now() };
-    setTests((prev) => prev.map((t) => t.id === updated.id ? withTs : t));
-    await replaceTest(withTs);
-  };
-
-  const onDeleteTest = async (id) => {
-    setTests((prev) => prev.filter((t) => t.id !== id));
-    setScreenshotsMap((prev) => { const n = { ...prev }; delete n[id]; return n; });
-    await Promise.all([deleteTest(id), removeScreenshots(id)]);
-  };
-
-  // ── Screenshots ───────────────────────────────────────────────────────────
-  const onSaveScreenshot = async (testId, zone, dataUrl) => {
-    const current = screenshotsMap[testId] ?? {};
-    const next = { ...current, [zone]: dataUrl };
-    setScreenshotsMap((prev) => ({ ...prev, [testId]: next }));
-    await saveScreenshots(testId, next);
-  };
-
-  // Save multiple zones at once — avoids the race condition of parallel onSaveScreenshot calls
-  const onSaveScreenshots = async (testId, zonesObj) => {
-    const current = screenshotsMap[testId] ?? {};
-    const next = { ...current, ...zonesObj };
-    setScreenshotsMap((prev) => ({ ...prev, [testId]: next }));
-    await saveScreenshots(testId, next);
-  };
-
-  const onClearScreenshot = async (testId, zone) => {
-    const current = screenshotsMap[testId] ?? {};
-    const next = { ...current };
-    delete next[zone];
-    setScreenshotsMap((prev) => ({ ...prev, [testId]: next }));
-    await saveScreenshots(testId, next);
-  };
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif", color: "#64748B", fontSize: 14 }}>
-        Loading…
+  if (loading) return <Spinner />;
+  if (error) return (
+    <div style={{ minHeight: "100vh", background: BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif", gap: 12, padding: 24 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#DC2626" }}>Setup Required</div>
+      <div style={{ fontSize: 13, color: MUTED, maxWidth: 480, textAlign: "center" }}>
+        The <code>agencies</code> table is missing. Run the setup SQL in your Supabase dashboard, then refresh.
       </div>
-    );
-  }
+      <div style={{ fontSize: 11, color: "#EF4444", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 14px", maxWidth: 480, wordBreak: "break-all" }}>
+        {error}
+      </div>
+      <button onClick={load} style={{ marginTop: 8, padding: "8px 20px", borderRadius: 7, border: "none", background: ACCENT, color: "#fff", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+        Retry
+      </button>
+    </div>
+  );
+  return (
+    <SuperAdminGate>
+      <SuperAdminPage agencies={agencies} onAgenciesChange={load} />
+    </SuperAdminGate>
+  );
+}
 
+function Spinner() {
+  return (
+    <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif", color: MUTED, fontSize: 14 }}>
+      Loading…
+    </div>
+  );
+}
+
+// ── Root app ─────────────────────────────────────────────────────────────────
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={
-            <AdminGate>
-              <HomePage
-                tests={tests}
-                onCreateTest={onCreateTest}
-                onCreateTests={onCreateTests}
-                onDeleteTest={onDeleteTest}
-                onUpdateTest={onUpdateTest}
-                clients={clients}
-                onCreateClient={onCreateClient}
-                onCreateClients={onCreateClients}
-                onUpdateClient={onUpdateClient}
-                onDeleteClient={onDeleteClient}
-                onSaveScreenshot={onSaveScreenshot}
-                onSaveScreenshots={onSaveScreenshots}
-              />
-            </AdminGate>
-          }
-        />
-        <Route
-          path="/tests/:id"
-          element={
-            <AdminGate>
-              <TestDetailsPage
-                tests={tests}
-                screenshotsMap={screenshotsMap}
-                setScreenshotsMap={setScreenshotsMap}
-                onUpdateTest={onUpdateTest}
-                onDeleteTest={onDeleteTest}
-                onSaveScreenshot={onSaveScreenshot}
-                onClearScreenshot={onClearScreenshot}
-                clients={clients}
-              />
-            </AdminGate>
-          }
-        />
-        <Route
-          path="/tests/:id/edit"
-          element={
-            <AdminGate>
-              <TestDefinitionPage
-                tests={tests}
-                screenshotsMap={screenshotsMap}
-                setScreenshotsMap={setScreenshotsMap}
-                onUpdateTest={onUpdateTest}
-                onReplaceTest={onReplaceTest}
-                onDeleteTest={onDeleteTest}
-                onSaveScreenshot={onSaveScreenshot}
-                onClearScreenshot={onClearScreenshot}
-                clients={clients}
-                onCreateClient={onCreateClient}
-              />
-            </AdminGate>
-          }
-        />
-        <Route
-          path="/clients/:id"
-          element={
-            <AdminGate>
-              <ClientPage
-                clients={clients}
-                tests={tests}
-                onUpdateTest={onUpdateTest}
-                onSaveCrawlReport={onSaveCrawlReport}
-                onUpdateClientBrand={onUpdateClientBrand}
-                onRegeneratePortalToken={onRegeneratePortalToken}
-                onUpdatePortalPassword={onUpdatePortalPassword}
-              />
-            </AdminGate>
-          }
-        />
-        {/* ── Client Portal (shareable, read-only, scoped to one client) ── */}
-        <Route
-          path="/portal/:portalToken"
-          element={
-            <PortalTokenGate clients={clients}>
-              <ClientPage
-                clients={clients}
-                tests={tests}
-                onUpdateClientBrand={onUpdateClientBrand}
-              />
-            </PortalTokenGate>
-          }
-        />
-        <Route
-          path="/portal/:portalToken/tests/:testSlug"
-          element={
-            <PortalTokenGate clients={clients}>
-              <TestDetailsPage
-                tests={tests}
-                screenshotsMap={screenshotsMap}
-                setScreenshotsMap={setScreenshotsMap}
-                onUpdateTest={onUpdateTest}
-                onDeleteTest={onDeleteTest}
-                onSaveScreenshot={onSaveScreenshot}
-                onClearScreenshot={onClearScreenshot}
-                clients={clients}
-              />
-            </PortalTokenGate>
-          }
-        />
+        {/* Platform admin — manage agencies */}
+        <Route path="/" element={<SuperAdminShell />} />
+
+        {/* Client portals — unchanged, accessed by portalToken UUID */}
+        <Route path="/portal/:portalToken" element={
+          <PortalShell>
+            {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
+              <PortalRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
+            )}
+          </PortalShell>
+        } />
+        <Route path="/portal/:portalToken/tests/:testSlug" element={
+          <PortalShell>
+            {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
+              <PortalTestRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
+            )}
+          </PortalShell>
+        } />
+
+        {/* Agency admin — all agency routes handled inside AgencyWrapper */}
+        <Route path="/:agencySlug/*" element={<AgencyWrapper />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+  );
+}
+
+// ── Portal route helpers ──────────────────────────────────────────────────────
+function PortalRoute({ clients, tests, screenshotsMap, setScreenshotsMap }) {
+  const { portalToken } = useParams();
+  const client = clients.find(c => c.portalToken === portalToken);
+  return (
+    <PortalGate client={client}>
+      <PortalContext.Provider value={{ isPortal: true }}>
+        <ClientPage clients={clients} tests={tests} onUpdateClientBrand={() => {}} />
+      </PortalContext.Provider>
+    </PortalGate>
+  );
+}
+
+function PortalTestRoute({ clients, tests, screenshotsMap, setScreenshotsMap }) {
+  const { portalToken } = useParams();
+  const client = clients.find(c => c.portalToken === portalToken);
+  return (
+    <PortalGate client={client}>
+      <PortalContext.Provider value={{ isPortal: true }}>
+        <TestDetailsPage
+          tests={tests}
+          screenshotsMap={screenshotsMap}
+          setScreenshotsMap={setScreenshotsMap}
+          onUpdateTest={() => {}}
+          onDeleteTest={() => {}}
+          onSaveScreenshot={() => {}}
+          onClearScreenshot={() => {}}
+          clients={clients}
+        />
+      </PortalContext.Provider>
+    </PortalGate>
   );
 }

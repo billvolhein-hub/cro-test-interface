@@ -82,6 +82,16 @@ export async function getAnchors(target) {
   });
 }
 
+export async function getTopBacklinks(target) {
+  return ahrefs("backlinks", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "url_from,url_to,domain_from,dofollow,anchor",
+    limit:    "1000",
+    order_by: "ahrefs_rank_source:desc",
+  });
+}
+
 export async function getBacklinksNewLost(target) {
   return ahrefs("refdomains-history", {
     target:           stripProtocol(target),
