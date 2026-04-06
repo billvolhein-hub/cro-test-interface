@@ -174,7 +174,7 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
     return (
       <div
         key={t.id}
-        onClick={() => navigate(isPortal ? `/portal/${client.portalToken}/tests/${toSlug(t.testName)}` : `/tests/${t.id}`)}
+        onClick={() => navigate(isPortal ? `/portal/${client.portalToken}/tests/${toSlug(t.testName)}` : ap(`/tests/${t.id}`))}
         style={{
           background: isHighPie ? "linear-gradient(135deg,#fff 80%,#FFFBEB 100%)" : CARD,
           border: `1.5px solid ${isHighPie ? "#F59E0B" : BORDER}`,
