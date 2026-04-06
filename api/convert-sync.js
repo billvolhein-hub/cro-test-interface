@@ -87,10 +87,5 @@ export default async function handler(req, res) {
     }
   } catch { /* non-fatal */ }
 
-  // Debug: all variations across all goals so we can see every conversion_data shape
-  const _debug_all_variations = (inner?.reportData ?? []).map(g => ({
-    goal_id: g.goal_id,
-    variations: (g.variations ?? []).map(v => ({ id: v.id, visitors: v.visitors, conversion_data: v.conversion_data })),
-  }));
-  res.json({ inner, goalNames, startDate, endDate, _debug_all_variations });
+  res.json({ inner, goalNames, startDate, endDate });
 }

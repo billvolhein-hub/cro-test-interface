@@ -373,25 +373,23 @@ function parseConvertReport(reportData, goalNames, variationsData, experienceId)
     const goalId   = goalEntry.goal_id;
     const goalName = goalNames[String(goalId)] ?? `Goal ${goalId}`;
 
+    // Find baseline rate for this goal so we can compute change ourselves
+    // (Convert API returns conversion_rate_change: 0 when baseline rate is 0%)
+    const baselineVariation = goalEntry.variations.find(v =>
+      variationsData.find(x => x.id === v.id)?.is_baseline
+    );
+    const baselineRate = Number(baselineVariation?.conversion_data?.conversion_rate ?? 0);
+
     const rows = goalEntry.variations.map(v => {
       const cd = v.conversion_data ?? {};
       const name        = varById[v.id] ?? String(v.id);
       const isBaseline  = variationsData.find(x => x.id === v.id)?.is_baseline ?? false;
       const visitors    = Number(v.visitors ?? 0);
-      const rate        = Number(cd.conversion_rate ?? 0);          // already %
-      // Convert API uses several different field names for conversion count across versions
-      const rawConv =
-        cd.conversions          ??
-        cd.num_conversions      ??
-        cd.total_conversions    ??
-        cd.goal_conversions     ??
-        v.conversions           ??
-        v.goal_conversions      ??
-        null;
-      const conversions = rawConv !== null
-        ? Number(rawConv)
-        : Math.round(visitors * rate / 100);
-      const change      = isBaseline ? 0 : Number(cd.conversion_rate_change ?? cd.rate_change ?? 0) * 100; // decimal → %
+      const rate        = Number(cd.conversion_rate ?? 0);
+      const rawConv     = cd.conversions ?? cd.num_conversions ?? cd.total_conversions ?? cd.goal_conversions ?? v.conversions ?? null;
+      const conversions = rawConv !== null ? Number(rawConv) : Math.round(visitors * rate / 100);
+      // Compute change as absolute difference in rate (handles 0% baseline correctly)
+      const change      = isBaseline ? 0 : rate - baselineRate;
       const confidence  = Number(cd.confidence ?? cd.statistical_significance ?? 0);
       return { variant: name, visitors, conversions, rate, change, confidence };
     });
@@ -419,10 +417,7 @@ export async function fetchConvertResults(experienceId) {
     throw Object.assign(new Error(msg), { raw: payload });
   }
 
-  const { inner, goalNames = {}, startDate = "", endDate = "", _debug_all_variations } = payload;
-  if (_debug_all_variations) {
-    console.log("[Convert] all variation conversion_data:", JSON.stringify(_debug_all_variations, null, 2));
-  }
+  const { inner, goalNames = {}, startDate = "", endDate = "" } = payload;
 
   if (!inner?.reportData || !inner?.variations_data) {
     throw Object.assign(
