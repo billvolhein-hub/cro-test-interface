@@ -151,7 +151,7 @@ export async function getOrganicCompetitors(target) {
     mode:     "domain",
     date:     today(),
     country:  "us",
-    select:   "domain,common_keywords,organic_keywords,organic_traffic,organic_traffic_value,organic_pages",
+    select:   "competitor_domain,keywords_common,keywords_competitor,traffic,value,pages,domain_rating,share",
     limit:    "20",
     order_by: "common_keywords:desc",
   });

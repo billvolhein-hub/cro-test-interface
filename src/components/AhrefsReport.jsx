@@ -357,9 +357,9 @@ function BubbleChart({ competitors, targetDomain }) {
 
   const W = 560, H = 220, PAD = { t: 28, r: 20, b: 36, l: 56 };
 
-  const maxTraffic = Math.max(...competitors.map(c => c.organic_traffic ?? 0), 1);
-  const maxValue   = Math.max(...competitors.map(c => c.organic_traffic_value ?? 0), 1);
-  const maxPages   = Math.max(...competitors.map(c => c.organic_pages ?? 0), 1);
+  const maxTraffic = Math.max(...competitors.map(c => c.traffic ?? 0), 1);
+  const maxValue   = Math.max(...competitors.map(c => c.value ?? 0), 1);
+  const maxPages   = Math.max(...competitors.map(c => c.pages ?? 0), 1);
   const MAX_R = 36, MIN_R = 6;
 
   const toX = v => PAD.l + (v / maxValue)  * (W - PAD.l - PAD.r);
@@ -396,16 +396,16 @@ function BubbleChart({ competitors, targetDomain }) {
 
       {/* Bubbles */}
       {competitors.map((c, i) => {
-        const cx = toX(c.organic_traffic_value ?? 0);
-        const cy = toY(c.organic_traffic ?? 0);
-        const r  = toR(c.organic_pages ?? 0);
+        const cx = toX(c.value ?? 0);
+        const cy = toY(c.traffic ?? 0);
+        const r  = toR(c.pages ?? 0);
         const color = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
         const isHov = hovered === i;
         return (
           <g key={i} style={{ cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
             <circle cx={cx} cy={cy} r={r} fill={color} opacity={isHov ? 0.9 : 0.75} stroke={isHov ? color : "none"} strokeWidth="2" />
             {isHov && (() => {
-              const lines = [c.domain, `Traffic: ${fmtT(c.organic_traffic ?? 0)}`, `Value: ${fmtK(c.organic_traffic_value ?? 0)}`, `Pages: ${(c.organic_pages ?? 0).toLocaleString()}`];
+              const lines = [c.competitor_domain ?? c.domain, `Traffic: ${fmtT(c.traffic ?? 0)}`, `Value: ${fmtK(c.value ?? 0)}`, `Pages: ${(c.pages ?? 0).toLocaleString()}`];
               const TW = Math.max(...lines.map(l => l.length * 5.8)) + 20;
               const TH = lines.length * 14 + 10;
               const tx = Math.min(Math.max(cx - TW / 2, PAD.l), W - PAD.r - TW);
@@ -1207,20 +1207,9 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
           {errors.competitors && <ErrBox msg={`Competitors: ${errors.competitors}`} />}
           {(() => {
             const raw = data?.competitors;
-            // Debug: surface raw shape if no recognized array found
-            const comps = raw?.competitors ?? raw?.domains ?? (Array.isArray(raw) ? raw : []);
-            if (!Array.isArray(comps) || !comps.length) {
-              if (raw) return (
-                <div style={{ fontSize: 10, color: MUTED, padding: "8px 12px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 6, marginTop: 8, wordBreak: "break-all" }}>
-                  Competitors raw shape: {JSON.stringify(raw).slice(0, 300)}
-                </div>
-              );
-              return null;
-            }
-            const totalKw = data?.serp?.keywords?.length
-              ? data.serp.keywords.reduce((s, k) => s + 1, 0)
-              : null;
-            const maxCommon = Math.max(...comps.map(c => c.common_keywords ?? 0), 1);
+            const comps = raw?.competitors ?? (Array.isArray(raw) ? raw : []);
+            if (!Array.isArray(comps) || !comps.length) return null;
+            const maxCommon = Math.max(...comps.map(c => c.keywords_common ?? 0), 1);
             const fmtN = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n ?? 0);
             return (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginTop: 8 }}>
@@ -1235,6 +1224,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     <thead>
                       <tr style={{ borderBottom: `1.5px solid ${BORDER}` }}>
                         <th style={{ textAlign: "left",  padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Domain</th>
+                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>DR</th>
                         <th style={{ textAlign: "center", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Keyword overlap</th>
                         <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Common KWs</th>
                         <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Share</th>
@@ -1245,17 +1235,18 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     <tbody>
                       {comps.slice(0, 15).map((c, i) => {
                         const color   = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
-                        const overlap = c.common_keywords ?? 0;
-                        const total   = c.organic_keywords ?? 1;
-                        const share   = total > 0 ? ((overlap / maxCommon) * 100).toFixed(1) : "0.0";
-                        // Overlap bar: proportion of maxCommon
+                        const overlap = c.keywords_common ?? 0;
+                        const share   = c.share != null ? `${(c.share * 100).toFixed(1)}%` : `${((overlap / maxCommon) * 100).toFixed(1)}%`;
                         const barW    = Math.round((overlap / maxCommon) * 80);
                         return (
                           <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                            <td style={{ padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                              <span style={{ fontWeight: 600, color: TEXT }}>{c.domain}</span>
+                            <td style={{ padding: "6px 8px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                                <span style={{ fontWeight: 600, color: TEXT }}>{c.competitor_domain}</span>
+                              </div>
                             </td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{c.domain_rating ?? "—"}</td>
                             <td style={{ padding: "6px 8px" }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
                                 <div style={{ height: 7, borderRadius: 3, background: color, width: barW, minWidth: 2 }} />
@@ -1263,9 +1254,9 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                               </div>
                             </td>
                             <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: TEXT }}>{overlap.toLocaleString()}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{share}%</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.organic_keywords)}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.organic_traffic)}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{share}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.keywords_competitor)}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.traffic)}</td>
                           </tr>
                         );
                       })}
