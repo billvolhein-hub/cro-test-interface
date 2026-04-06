@@ -310,16 +310,21 @@ function normaliseSerpFeatures(raw) {
 }
 
 function exportSerpCSV(keywords, domainName) {
-  const header = ["Keyword", "Position", "Volume", "Traffic", "URL", "CPC", "SERP Features"];
-  const rows = keywords.map(k => [
-    `"${(k.keyword ?? "").replace(/"/g, '""')}"`,
-    k.position ?? "",
-    k.volume ?? "",
-    k.traffic ?? "",
-    `"${(k.url ?? "").replace(/"/g, '""')}"`,
-    k.cpc ?? "",
-    `"${normaliseSerpFeatures(k.serp_features).join(", ")}"`,
-  ]);
+  const header = ["Keyword", "Position", "Volume", "Traffic", "URL", "CPC", "Difficulty", "Intent", "SERP Features"];
+  const rows = keywords.map(k => {
+    const intent = [k.is_branded && "Branded", k.is_commercial && "Commercial", k.is_transactional && "Transactional", k.is_informational && "Informational"].filter(Boolean).join("|");
+    return [
+      `"${(k.keyword ?? "").replace(/"/g, '""')}"`,
+      k.best_position ?? "",
+      k.volume ?? "",
+      k.sum_traffic ?? "",
+      `"${(k.best_position_url ?? "").replace(/"/g, '""')}"`,
+      k.cpc ?? "",
+      k.keyword_difficulty ?? "",
+      `"${intent}"`,
+      `"${normaliseSerpFeatures(k.serp_features).join(", ")}"`,
+    ];
+  });
   const csv = [header, ...rows].map(r => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url  = URL.createObjectURL(blob);
@@ -659,7 +664,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
             });
 
             const totalKw    = keywords.length;
-            const totalTraffic = keywords.reduce((s, k) => s + (k.traffic ?? 0), 0);
+            const totalTraffic = keywords.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
 
             // Share of Voice rows — sorted by keyword count desc
             const sovRows = Object.entries(featureCount)
@@ -730,7 +735,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                             <div key={i} style={{ paddingBottom: 8, borderBottom: i < oppKeywords.length - 1 ? `1px solid ${BORDER}` : "none" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                                 <span style={{ fontSize: 11, fontWeight: 700, color: TEXT, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw.keyword}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, flexShrink: 0 }}>#{kw.position}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, flexShrink: 0 }}>#{kw.best_position}</span>
                               </div>
                               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                                 {features.map(f => {
@@ -742,7 +747,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                                   );
                                 })}
                                 <span style={{ fontSize: 9, color: MUTED, marginLeft: "auto" }}>
-                                  {fmtNum(kw.volume)}/mo · {fmtNum(kw.traffic)} visits
+                                  {fmtNum(kw.volume)}/mo · {fmtNum(kw.sum_traffic)} visits
                                 </span>
                               </div>
                             </div>
