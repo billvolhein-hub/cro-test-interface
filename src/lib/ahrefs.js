@@ -106,6 +106,7 @@ export async function getOrganicKeywords(target) {
   return ahrefs("organic-keywords", {
     target:   stripProtocol(target),
     mode:     "domain",
+    date:     today(),
     select:   "keyword,position,volume,traffic,url,serp_features,cpc",
     limit:    "1000",
     order_by: "traffic:desc",
