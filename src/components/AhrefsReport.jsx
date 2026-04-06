@@ -1218,6 +1218,75 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                   </div>
                 )}
 
+                {/* ── Top Organic Competitors ── */}
+                {errors.competitors && <ErrBox msg={`Competitors: ${errors.competitors}`} />}
+                {(() => {
+                  const raw = data?.competitors;
+                  const comps = raw?.competitors ?? (Array.isArray(raw) ? raw : []);
+                  if (!Array.isArray(comps) || !comps.length) return null;
+                  const maxCommon = Math.max(...comps.map(c => c.keywords_common ?? 0), 1);
+                  const fmtN = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n ?? 0);
+                  const serpKws = keywords;
+                  const targetTraffic = serpKws.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
+                  const targetValue   = serpKws.reduce((s, k) => s + Math.round((k.cpc ?? 0) * (k.sum_traffic ?? 0)), 0);
+                  const targetPages   = new Set(serpKws.map(k => k.best_position_url).filter(Boolean)).size;
+                  const targetBubble  = { domain, traffic: targetTraffic, value: targetValue, pages: targetPages };
+                  return (
+                    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginBottom: 20 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>Top Organic Competitors</div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 16 }}>Domains competing for the same organic keywords. Circle size = organic pages.</div>
+
+                      <BubbleChart competitors={comps} target={targetBubble} />
+
+                      {/* Table */}
+                      <div style={{ marginTop: 20, overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                          <thead>
+                            <tr style={{ borderBottom: `1.5px solid ${BORDER}` }}>
+                              <th style={{ textAlign: "left",  padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Domain</th>
+                              <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>DR</th>
+                              <th style={{ textAlign: "center", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Keyword overlap</th>
+                              <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Common KWs</th>
+                              <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Share</th>
+                              <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Competitor KWs</th>
+                              <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Traffic</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {comps.slice(0, 15).map((c, i) => {
+                              const color   = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
+                              const overlap = c.keywords_common ?? 0;
+                              const share   = c.share != null ? `${(c.share * 100).toFixed(1)}%` : `${((overlap / maxCommon) * 100).toFixed(1)}%`;
+                              const barW    = Math.round((overlap / maxCommon) * 80);
+                              return (
+                                <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                                  <td style={{ padding: "6px 8px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                                      <span style={{ fontWeight: 600, color: TEXT }}>{c.competitor_domain}</span>
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{c.domain_rating ?? "—"}</td>
+                                  <td style={{ padding: "6px 8px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+                                      <div style={{ height: 7, borderRadius: 3, background: color, width: barW, minWidth: 2 }} />
+                                      <div style={{ height: 7, borderRadius: 3, background: "#E2E8F0", width: 80 - barW }} />
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: TEXT }}>{overlap.toLocaleString()}</td>
+                                  <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{share}</td>
+                                  <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.keywords_competitor)}</td>
+                                  <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.traffic)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── Export ── */}
                 {!isPortal && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 8 }}>
@@ -1232,77 +1301,6 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                   </div>
                 )}
               </>
-            );
-          })()}
-
-          {/* ── Top Organic Competitors ── */}
-          {errors.competitors && <ErrBox msg={`Competitors: ${errors.competitors}`} />}
-          {(() => {
-            const raw = data?.competitors;
-            const comps = raw?.competitors ?? (Array.isArray(raw) ? raw : []);
-            if (!Array.isArray(comps) || !comps.length) return null;
-            const maxCommon = Math.max(...comps.map(c => c.keywords_common ?? 0), 1);
-            const fmtN = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n ?? 0);
-            return (
-              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginTop: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>Top Organic Competitors</div>
-                <div style={{ fontSize: 11, color: MUTED, marginBottom: 16 }}>Domains competing for the same organic keywords. Circle size = organic pages.</div>
-
-                {(() => {
-                  const serpKws = data?.serp?.keywords ?? [];
-                  const targetTraffic = serpKws.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
-                  const targetValue   = serpKws.reduce((s, k) => s + Math.round((k.cpc ?? 0) * (k.sum_traffic ?? 0)), 0);
-                  const targetPages   = new Set(serpKws.map(k => k.best_position_url).filter(Boolean)).size;
-                  const targetBubble  = { domain, traffic: targetTraffic, value: targetValue, pages: targetPages };
-                  return <BubbleChart competitors={comps} target={targetBubble} />;
-                })()}
-
-                {/* Table */}
-                <div style={{ marginTop: 20, overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                    <thead>
-                      <tr style={{ borderBottom: `1.5px solid ${BORDER}` }}>
-                        <th style={{ textAlign: "left",  padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Domain</th>
-                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>DR</th>
-                        <th style={{ textAlign: "center", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Keyword overlap</th>
-                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Common KWs</th>
-                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Share</th>
-                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Competitor KWs</th>
-                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Traffic</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comps.slice(0, 15).map((c, i) => {
-                        const color   = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
-                        const overlap = c.keywords_common ?? 0;
-                        const share   = c.share != null ? `${(c.share * 100).toFixed(1)}%` : `${((overlap / maxCommon) * 100).toFixed(1)}%`;
-                        const barW    = Math.round((overlap / maxCommon) * 80);
-                        return (
-                          <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                            <td style={{ padding: "6px 8px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                                <span style={{ fontWeight: 600, color: TEXT }}>{c.competitor_domain}</span>
-                              </div>
-                            </td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{c.domain_rating ?? "—"}</td>
-                            <td style={{ padding: "6px 8px" }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
-                                <div style={{ height: 7, borderRadius: 3, background: color, width: barW, minWidth: 2 }} />
-                                <div style={{ height: 7, borderRadius: 3, background: "#E2E8F0", width: 80 - barW }} />
-                              </div>
-                            </td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: TEXT }}>{overlap.toLocaleString()}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{share}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.keywords_competitor)}</td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.traffic)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             );
           })()}
 
