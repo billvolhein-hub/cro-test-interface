@@ -4,7 +4,7 @@ import AppHeader from "../components/AppHeader";
 import ClientsModal from "../components/ClientsModal";
 import { pieScore, fmtDate } from "../lib/utils";
 import ClientNotesFeed from "../components/ClientNotesFeed";
-import { ACCENT, BG, CARD, BORDER, TEXT, MUTED, TEAL } from "../lib/constants";
+import { ACCENT, BG, CARD, BORDER, TEXT, MUTED } from "../lib/constants";
 import { useBreakpoint } from "../lib/useBreakpoint";
 
 export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
@@ -12,30 +12,23 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
   const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile } = useBreakpoint();
 
-  const [activeClientId,   setActiveClientId]   = useState("all");
   const [clientsModalOpen, setClientsModalOpen] = useState(false);
   const [notesFeedOpen,    setNotesFeedOpen]    = useState(true);
 
   // ── Derived data ─────────────────────────────────────────────────────────────
-  const allTests = tests;
-  const backlog   = allTests.filter(t => (t.status || "Backlog") === "Backlog").length;
-  const inWork    = allTests.filter(t => ["Under Review", "Promoted to Test"].includes(t.status)).length;
-  const live      = allTests.filter(t => t.status === "Test Running").length;
-  const complete  = allTests.filter(t => t.status === "Test Complete").length;
-  const highPie   = allTests.filter(t => Number(pieScore(t)) >= 6).length;
+  const backlog   = tests.filter(t => (t.status || "Backlog") === "Backlog").length;
+  const inWork    = tests.filter(t => ["Under Review", "Promoted to Test"].includes(t.status)).length;
+  const live      = tests.filter(t => t.status === "Test Running").length;
+  const complete  = tests.filter(t => t.status === "Test Complete").length;
+  const highPie   = tests.filter(t => Number(pieScore(t)) >= 6).length;
+  const liveTests = tests.filter(t => t.status === "Test Running");
 
   const withSiteReport    = clients.filter(c => c.crawlReport?.domain).length;
   const withBacklinks     = clients.filter(c => c.crawlReport?.ahrefs).length;
   const withSEOIssues     = clients.filter(c => c.crawlReport?.issues?.length > 0).length;
   const totalPagesCrawled = clients.reduce((sum, c) => sum + (c.crawlReport?.pages?.length ?? 0), 0);
 
-  const liveTests = allTests.filter(t => t.status === "Test Running");
-
-  const filteredNoteTests = activeClientId === "all"
-    ? tests
-    : tests.filter(t => (t.clientId ?? clients[0]?.id) === activeClientId);
-
-  // ── Sub-components ────────────────────────────────────────────────────────────
+  // ── Badge sub-components ──────────────────────────────────────────────────────
   const TestBadge = ({ label, count, color, bg, border }) => (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: isMobile ? "10px 14px" : "12px 20px", minWidth: isMobile ? 64 : 80, gap: 4 }}>
       <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 800, color, lineHeight: 1 }}>{count}</div>
@@ -62,17 +55,84 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
 
       <AppHeader />
 
-      {/* ── Agency Overview ───────────────────────────────────────────────────── */}
-      {clients.length > 0 && (
-        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+      <div style={{ padding: isMobile ? "0 16px 48px" : "0 28px 56px", overflowX: "hidden" }}>
 
-          {/* Testing row */}
+        {/* ── Client Management ─────────────────────────────────────────────── */}
+        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: clients.length > 0 ? 16 : 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Clients</div>
+            <div style={{ flex: 1, height: 1, background: BORDER }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginRight: 4 }}>{clients.length} client{clients.length !== 1 ? "s" : ""}</span>
+            <button
+              onClick={() => setClientsModalOpen(true)}
+              style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: "none", border: `1.5px solid ${BORDER}`, color: MUTED }}>
+              Manage
+            </button>
+          </div>
+
+          {clients.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 13, color: MUTED, marginBottom: 12 }}>No clients yet.</div>
+              <button onClick={() => setClientsModalOpen(true)}
+                style={{ background: ACCENT, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                Add First Client
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+              {clients.map(c => {
+                const clientTests  = tests.filter(t => t.clientId === c.id);
+                const clientLive   = clientTests.filter(t => t.status === "Test Running").length;
+                const clientWork   = clientTests.filter(t => ["Under Review","Promoted to Test"].includes(t.status)).length;
+                const hasSEO       = !!(c.crawlReport?.domain);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => navigate(ap(`/clients/${c.id}`))}
+                    style={{ background: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", fontFamily: "'Inter',sans-serif", textAlign: "left", transition: "border-color .15s, box-shadow .15s", display: "flex", flexDirection: "column", gap: 8 }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.boxShadow = "0 2px 10px rgba(27,58,107,.1)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = "none"; }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                      <span style={{ fontSize: 13, color: MUTED, flexShrink: 0 }}>↗</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 4, padding: "1px 6px" }}>
+                        {clientTests.length} test{clientTests.length !== 1 ? "s" : ""}
+                      </span>
+                      {clientLive > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, padding: "1px 6px" }}>
+                          {clientLive} live
+                        </span>
+                      )}
+                      {clientWork > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#B45309", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 4, padding: "1px 6px" }}>
+                          {clientWork} in work
+                        </span>
+                      )}
+                      {hasSEO && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#2A8C8C", background: "#F0FAFA", border: "1px solid #A8D8D8", borderRadius: 4, padding: "1px 6px" }}>
+                          SEO ✓
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Testing ───────────────────────────────────────────────────────── */}
+        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+
+          {/* Testing badge row */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🧪 Testing</div>
             <div style={{ flex: 1, height: 1, background: BORDER }} />
-            <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{allTests.length} total</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{tests.length} total</div>
           </div>
-          <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 24 }}>
             <TestBadge label="Backlog"  count={backlog}  color="#1B3A6B" bg="#EEF2FF" border="#C7D2FE" />
             <TestBadge label="In Work"  count={inWork}   color="#B45309" bg="#FFFBEB" border="#FDE68A" />
             <TestBadge label="Live"     count={live}     color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />
@@ -80,84 +140,21 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
             {highPie > 0 && <TestBadge label="High PIE ★" count={highPie} color="#B45309" bg="#FFFBEB" border="#FDE68A" />}
           </div>
 
-          {/* SEO row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔍 SEO</div>
-            <div style={{ flex: 1, height: 1, background: BORDER }} />
-            <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clients.length} client{clients.length !== 1 ? "s" : ""}</div>
-          </div>
-          <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap" }}>
-            <SeoBadge icon="📊" label="Site Reports"   count={withSiteReport}  total={clients.length} color="#2A8C8C" bg="#F0FAFA" border="#A8D8D8" />
-            <SeoBadge icon="🔗" label="Backlink Intel"  count={withBacklinks}   total={clients.length} color="#6D28D9" bg="#F5F3FF" border="#DDD6FE" />
-            <SeoBadge icon="⚠️" label="Issues Reports"  count={withSEOIssues}   total={clients.length} color="#B45309" bg="#FFFBEB" border="#FDE68A" />
-            {totalPagesCrawled > 0 && <SeoBadge icon="🗂" label="Pages Crawled" count={totalPagesCrawled.toLocaleString()} color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />}
-          </div>
-
-        </div>
-      )}
-
-      <div style={{ padding: isMobile ? "0 16px 36px" : "0 28px 48px", overflowX: "hidden" }}>
-
-        {/* ── Client Management ──────────────────────────────────────────────── */}
-        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Clients</div>
-            <div style={{ flex: 1, height: 1, background: BORDER }} />
-            <button
-              onClick={() => setClientsModalOpen(true)}
-              style={{ padding: "5px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: "none", border: `1.5px solid ${BORDER}`, color: MUTED }}>
-              Manage Clients
-            </button>
-          </div>
-          {clients.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "24px 0", color: MUTED }}>
-              <div style={{ fontSize: 13, marginBottom: 12 }}>No clients yet.</div>
-              <button onClick={() => setClientsModalOpen(true)}
-                style={{ background: ACCENT, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
-                Add First Client
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {clients.map(c => (
-                <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 20, overflow: "hidden", border: `1.5px solid ${activeClientId === c.id ? ACCENT : BORDER}`, transition: "all .15s" }}>
-                  <button
-                    onClick={() => setActiveClientId(prev => prev === c.id ? "all" : c.id)}
-                    style={{ padding: isMobile ? "6px 12px" : "7px 14px", fontSize: 13, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", background: activeClientId === c.id ? ACCENT : "#fff", color: activeClientId === c.id ? "#fff" : MUTED, transition: "all .15s" }}>
-                    {c.name}
-                  </button>
-                  <button
-                    onClick={() => navigate(ap(`/clients/${c.id}`))}
-                    title={`${c.name} portfolio`}
-                    style={{ padding: isMobile ? "6px 10px" : "7px 11px", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", border: "none", borderLeft: `1px solid ${activeClientId === c.id ? "rgba(255,255,255,.3)" : BORDER}`, background: activeClientId === c.id ? "#142d54" : "#F7F8FA", color: activeClientId === c.id ? "rgba(255,255,255,.8)" : MUTED, transition: "all .15s" }}>
-                    ↗
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── Testing ────────────────────────────────────────────────────────── */}
-        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-
           {/* Client Notes */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: notesFeedOpen ? 16 : 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>🧪 Testing</div>
-            <div style={{ flex: 1, height: 1, background: BORDER }} />
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20, marginBottom: liveTests.length > 0 ? 20 : 0 }}>
+            <ClientNotesFeed
+              tests={tests}
+              clients={clients}
+              clientId={null}
+              collapsed={!notesFeedOpen}
+              onToggle={() => setNotesFeedOpen(v => !v)}
+              onUpdateTest={onUpdateTest}
+            />
           </div>
-          <ClientNotesFeed
-            tests={filteredNoteTests}
-            clients={clients}
-            clientId={activeClientId === "all" ? null : activeClientId}
-            collapsed={!notesFeedOpen}
-            onToggle={() => setNotesFeedOpen(v => !v)}
-            onUpdateTest={onUpdateTest}
-          />
 
           {/* Live Tests */}
           {liveTests.length > 0 && (
-            <div style={{ marginTop: 20 }}>
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔴 Live Tests</div>
                 <div style={{ flex: 1, height: 1, background: "#A5F3FC" }} />
@@ -165,7 +162,7 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {liveTests.map(t => {
-                  const clientName = clients.find(c => c.id === t.clientId)?.name ?? "Unknown Client";
+                  const clientName = clients.find(c => c.id === t.clientId)?.name ?? "Unknown";
                   const goals = t.results?.goals ?? [];
                   const order = t.results?.variantOrder ?? [];
                   return (
@@ -175,8 +172,6 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
                       style={{ background: "#F0FEFF", border: "1.5px solid #A5F3FC", borderRadius: 10, padding: isMobile ? "12px 14px" : "14px 18px", cursor: "pointer", transition: "border-color .15s, box-shadow .15s" }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = "#0E7490"; e.currentTarget.style.boxShadow = "0 2px 10px rgba(14,116,144,.1)"; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = "#A5F3FC"; e.currentTarget.style.boxShadow = "none"; }}>
-
-                      {/* Row: client chip + test name + date */}
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: goals.length > 0 ? 10 : 0, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>
                           {clientName}
@@ -189,14 +184,8 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
                             {t.testType}
                           </span>
                         )}
-                        {t.updatedAt && (
-                          <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
-                            {fmtDate(t.updatedAt)}
-                          </span>
-                        )}
+                        {t.updatedAt && <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>{fmtDate(t.updatedAt)}</span>}
                       </div>
-
-                      {/* Results: one row per goal */}
                       {goals.map((goal, gi) => {
                         const baseline = goal.rows.find(r => r.variant === order[0]);
                         const variants = goal.rows.filter(r => r.variant !== order[0]);
@@ -213,22 +202,17 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
                               const up = v.change >= 0;
                               return (
                                 <span key={v.variant} style={{ fontSize: 11, fontWeight: 700, color: up ? "#15803D" : "#DC2626", background: up ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${up ? "#BBF7D0" : "#FECACA"}`, borderRadius: 4, padding: "2px 8px" }}>
-                                  {v.variant} {v.rate.toFixed(2)}% <span style={{ opacity: 0.8 }}>({up ? "+" : ""}{v.change.toFixed(1)}%)</span>
+                                  {v.variant} {v.rate.toFixed(2)}% ({up ? "+" : ""}{v.change.toFixed(1)}%)
                                 </span>
                               );
                             })}
                             {goal.rows.length > 0 && (
-                              <span style={{ fontSize: 10, color: MUTED }}>
-                                {goal.rows.reduce((s, r) => s + (r.conversions ?? 0), 0).toLocaleString()} conversions
-                              </span>
+                              <span style={{ fontSize: 10, color: MUTED }}>{goal.rows.reduce((s, r) => s + (r.conversions ?? 0), 0).toLocaleString()} conv.</span>
                             )}
                           </div>
                         );
                       })}
-
-                      {goals.length === 0 && (
-                        <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>No results synced yet</div>
-                      )}
+                      {goals.length === 0 && <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>No results synced yet</div>}
                     </div>
                   );
                 })}
@@ -236,6 +220,23 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
             </div>
           )}
         </div>
+
+        {/* ── SEO ───────────────────────────────────────────────────────────── */}
+        {clients.length > 0 && (
+          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔍 SEO</div>
+              <div style={{ flex: 1, height: 1, background: BORDER }} />
+              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clients.length} client{clients.length !== 1 ? "s" : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap" }}>
+              <SeoBadge icon="📊" label="Site Reports"   count={withSiteReport}  total={clients.length} color="#2A8C8C" bg="#F0FAFA" border="#A8D8D8" />
+              <SeoBadge icon="🔗" label="Backlink Intel"  count={withBacklinks}   total={clients.length} color="#6D28D9" bg="#F5F3FF" border="#DDD6FE" />
+              <SeoBadge icon="⚠️" label="Issues Reports"  count={withSEOIssues}   total={clients.length} color="#B45309" bg="#FFFBEB" border="#FDE68A" />
+              {totalPagesCrawled > 0 && <SeoBadge icon="🗂" label="Pages Crawled" count={totalPagesCrawled.toLocaleString()} color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />}
+            </div>
+          </div>
+        )}
 
       </div>
 
