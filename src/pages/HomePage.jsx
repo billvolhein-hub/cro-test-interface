@@ -27,9 +27,11 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
   const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile } = useBreakpoint();
 
-  const [clientsModalOpen, setClientsModalOpen] = useState(false);
-  const [notesFeedOpen,    setNotesFeedOpen]    = useState(true);
-  const [seoExpanded,      setSeoExpanded]      = useState(false);
+  const [clientsModalOpen,  setClientsModalOpen]  = useState(false);
+  const [notesFeedOpen,     setNotesFeedOpen]     = useState(true);
+  const [seoExpanded,       setSeoExpanded]       = useState(false);
+  const [testingOpen,       setTestingOpen]       = useState(true);
+  const [seoOpen,           setSeoOpen]           = useState(true);
 
   // ── Testing derived data ──────────────────────────────────────────────────
   const backlog   = tests.filter(t => (t.status || "Backlog") === "Backlog").length;
@@ -141,82 +143,85 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
         {/* ── Testing ───────────────────────────────────────────────────────── */}
         <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: testingOpen ? 14 : 0, cursor: "pointer" }} onClick={() => setTestingOpen(v => !v)}>
             <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🧪 Testing</div>
             <div style={{ flex: 1, height: 1, background: BORDER }} />
             <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{tests.length} total</div>
+            <div style={{ fontSize: 12, color: MUTED, transform: testingOpen ? "rotate(180deg)" : "none", transition: "transform .2s", lineHeight: 1 }}>▾</div>
           </div>
-          <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 24 }}>
-            <TestBadge label="Backlog"  count={backlog}  color="#1B3A6B" bg="#EEF2FF" border="#C7D2FE" />
-            <TestBadge label="In Work"  count={inWork}   color="#B45309" bg="#FFFBEB" border="#FDE68A" />
-            <TestBadge label="Live"     count={live}     color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />
-            <TestBadge label="Complete" count={complete} color="#15803D" bg="#F0FDF4" border="#BBF7D0" />
-            {highPie > 0 && <TestBadge label="High PIE ★" count={highPie} color="#B45309" bg="#FFFBEB" border="#FDE68A" />}
-          </div>
+          {testingOpen && <>
+            <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 24 }}>
+              <TestBadge label="Backlog"  count={backlog}  color="#1B3A6B" bg="#EEF2FF" border="#C7D2FE" />
+              <TestBadge label="In Work"  count={inWork}   color="#B45309" bg="#FFFBEB" border="#FDE68A" />
+              <TestBadge label="Live"     count={live}     color="#0E7490" bg="#ECFEFF" border="#A5F3FC" />
+              <TestBadge label="Complete" count={complete} color="#15803D" bg="#F0FDF4" border="#BBF7D0" />
+              {highPie > 0 && <TestBadge label="High PIE ★" count={highPie} color="#B45309" bg="#FFFBEB" border="#FDE68A" />}
+            </div>
 
-          {/* Client Notes */}
-          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20, marginBottom: liveTests.length > 0 ? 20 : 0 }}>
-            <ClientNotesFeed
-              tests={tests}
-              clients={clients}
-              clientId={null}
-              collapsed={!notesFeedOpen}
-              onToggle={() => setNotesFeedOpen(v => !v)}
-              onUpdateTest={onUpdateTest}
-            />
-          </div>
+            {/* Client Notes */}
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20, marginBottom: liveTests.length > 0 ? 20 : 0 }}>
+              <ClientNotesFeed
+                tests={tests}
+                clients={clients}
+                clientId={null}
+                collapsed={!notesFeedOpen}
+                onToggle={() => setNotesFeedOpen(v => !v)}
+                onUpdateTest={onUpdateTest}
+              />
+            </div>
 
           {/* Live Tests */}
-          {liveTests.length > 0 && (
-            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔴 Live Tests</div>
-                <div style={{ flex: 1, height: 1, background: "#A5F3FC" }} />
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#0E7490" }}>{liveTests.length} running</div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {liveTests.map(t => {
-                  const clientName = clients.find(c => c.id === t.clientId)?.name ?? "Unknown";
-                  const goals = t.results?.goals ?? [];
-                  const order = t.results?.variantOrder ?? [];
-                  return (
-                    <div key={t.id} onClick={() => navigate(ap(`/tests/${t.id}`))}
-                      style={{ background: "#F0FEFF", border: "1.5px solid #A5F3FC", borderRadius: 10, padding: isMobile ? "12px 14px" : "14px 18px", cursor: "pointer", transition: "border-color .15s, box-shadow .15s" }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#0E7490"; e.currentTarget.style.boxShadow = "0 2px 10px rgba(14,116,144,.1)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "#A5F3FC"; e.currentTarget.style.boxShadow = "none"; }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: goals.length > 0 ? 10 : 0, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{clientName}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.testName || "Untitled Test"}</span>
-                        {t.testType && <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: "#F7F8FA", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", whiteSpace: "nowrap" }}>{t.testType}</span>}
-                        {t.updatedAt && <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>{fmtDate(t.updatedAt)}</span>}
+            {liveTests.length > 0 && (
+              <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#0E7490", letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔴 Live Tests</div>
+                  <div style={{ flex: 1, height: 1, background: "#A5F3FC" }} />
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#0E7490" }}>{liveTests.length} running</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {liveTests.map(t => {
+                    const clientName = clients.find(c => c.id === t.clientId)?.name ?? "Unknown";
+                    const goals = t.results?.goals ?? [];
+                    const order = t.results?.variantOrder ?? [];
+                    return (
+                      <div key={t.id} onClick={() => navigate(ap(`/tests/${t.id}`))}
+                        style={{ background: "#F0FEFF", border: "1.5px solid #A5F3FC", borderRadius: 10, padding: isMobile ? "12px 14px" : "14px 18px", cursor: "pointer", transition: "border-color .15s, box-shadow .15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#0E7490"; e.currentTarget.style.boxShadow = "0 2px 10px rgba(14,116,144,.1)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#A5F3FC"; e.currentTarget.style.boxShadow = "none"; }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: goals.length > 0 ? 10 : 0, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#0E7490", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{clientName}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.testName || "Untitled Test"}</span>
+                          {t.testType && <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: "#F7F8FA", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", whiteSpace: "nowrap" }}>{t.testType}</span>}
+                          {t.updatedAt && <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>{fmtDate(t.updatedAt)}</span>}
+                        </div>
+                        {goals.map((goal, gi) => {
+                          const baseline = goal.rows.find(r => r.variant === order[0]);
+                          const variants = goal.rows.filter(r => r.variant !== order[0]);
+                          if (!baseline && variants.length === 0) return null;
+                          return (
+                            <div key={gi} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{goal.name}</span>
+                              {baseline && <span style={{ fontSize: 11, fontWeight: 600, color: "#475569", background: "#fff", border: "1px solid #CBD5E1", borderRadius: 4, padding: "2px 8px" }}>{baseline.variant} {baseline.rate.toFixed(2)}%</span>}
+                              {variants.map(v => {
+                                const up = v.change >= 0;
+                                return (
+                                  <span key={v.variant} style={{ fontSize: 11, fontWeight: 700, color: up ? "#15803D" : "#DC2626", background: up ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${up ? "#BBF7D0" : "#FECACA"}`, borderRadius: 4, padding: "2px 8px" }}>
+                                    {v.variant} {v.rate.toFixed(2)}% ({up ? "+" : ""}{v.change.toFixed(1)}%)
+                                  </span>
+                                );
+                              })}
+                              {goal.rows.length > 0 && <span style={{ fontSize: 10, color: MUTED }}>{goal.rows.reduce((s, r) => s + (r.conversions ?? 0), 0).toLocaleString()} conv.</span>}
+                            </div>
+                          );
+                        })}
+                        {goals.length === 0 && <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>No results synced yet</div>}
                       </div>
-                      {goals.map((goal, gi) => {
-                        const baseline = goal.rows.find(r => r.variant === order[0]);
-                        const variants = goal.rows.filter(r => r.variant !== order[0]);
-                        if (!baseline && variants.length === 0) return null;
-                        return (
-                          <div key={gi} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>{goal.name}</span>
-                            {baseline && <span style={{ fontSize: 11, fontWeight: 600, color: "#475569", background: "#fff", border: "1px solid #CBD5E1", borderRadius: 4, padding: "2px 8px" }}>{baseline.variant} {baseline.rate.toFixed(2)}%</span>}
-                            {variants.map(v => {
-                              const up = v.change >= 0;
-                              return (
-                                <span key={v.variant} style={{ fontSize: 11, fontWeight: 700, color: up ? "#15803D" : "#DC2626", background: up ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${up ? "#BBF7D0" : "#FECACA"}`, borderRadius: 4, padding: "2px 8px" }}>
-                                  {v.variant} {v.rate.toFixed(2)}% ({up ? "+" : ""}{v.change.toFixed(1)}%)
-                                </span>
-                              );
-                            })}
-                            {goal.rows.length > 0 && <span style={{ fontSize: 10, color: MUTED }}>{goal.rows.reduce((s, r) => s + (r.conversions ?? 0), 0).toLocaleString()} conv.</span>}
-                          </div>
-                        );
-                      })}
-                      {goals.length === 0 && <div style={{ fontSize: 12, color: MUTED, fontStyle: "italic" }}>No results synced yet</div>}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </>}
         </div>
 
         {/* ── SEO Intelligence ──────────────────────────────────────────────── */}
@@ -224,13 +229,14 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
           <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
 
             {/* Section header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: seoOpen ? 18 : 0, cursor: "pointer" }} onClick={() => setSeoOpen(v => !v)}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔍 SEO Intelligence</div>
               <div style={{ flex: 1, height: 1, background: BORDER }} />
               <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clientsWithSEO.length}/{clients.length} reporting</div>
+              <div style={{ fontSize: 12, color: MUTED, transform: seoOpen ? "rotate(180deg)" : "none", transition: "transform .2s", lineHeight: 1 }}>▾</div>
             </div>
 
-            {/* Aggregate summary strip */}
+            {seoOpen && <>{/* Aggregate summary strip */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
 
               {/* Avg DR */}
@@ -385,12 +391,13 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
               {/* Show more / less */}
               {seoRows.length > SEO_PREVIEW && (
                 <button
-                  onClick={() => setSeoExpanded(v => !v)}
+                  onClick={e => { e.stopPropagation(); setSeoExpanded(v => !v); }}
                   style={{ marginTop: 12, width: "100%", background: "none", border: `1.5px dashed ${BORDER}`, color: MUTED, padding: "9px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
                   {seoExpanded ? "Show less" : `+ ${seoRows.length - SEO_PREVIEW} more client${seoRows.length - SEO_PREVIEW !== 1 ? "s" : ""}`}
                 </button>
               )}
             </div>
+          </>}
 
           </div>
         )}
