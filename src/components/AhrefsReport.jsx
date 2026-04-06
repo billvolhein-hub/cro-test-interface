@@ -3,7 +3,7 @@ import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
   getBacklinksHistory, getRefdomains, getAnchors, getTopBacklinks,
-  getOrganicKeywords, getSerpFeaturesHistory,
+  getOrganicKeywords, getSerpFeaturesHistory, getOrganicCompetitors,
 } from "../lib/ahrefs";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -348,6 +348,84 @@ function exportSerpCSV(keywords, domainName) {
   URL.revokeObjectURL(url);
 }
 
+// ── Bubble / Scatter Chart ────────────────────────────────────────────────────
+const BUBBLE_COLORS = ["#F59E0B","#EF4444","#8B5CF6","#10B981","#3B82F6","#F97316","#EC4899","#06B6D4","#84CC16","#A78BFA"];
+
+function BubbleChart({ competitors, targetDomain }) {
+  const [hovered, setHovered] = useState(null);
+  if (!competitors?.length) return null;
+
+  const W = 560, H = 220, PAD = { t: 28, r: 20, b: 36, l: 56 };
+
+  const maxTraffic = Math.max(...competitors.map(c => c.organic_traffic ?? 0), 1);
+  const maxValue   = Math.max(...competitors.map(c => c.organic_traffic_value ?? 0), 1);
+  const maxPages   = Math.max(...competitors.map(c => c.organic_pages ?? 0), 1);
+  const MAX_R = 36, MIN_R = 6;
+
+  const toX = v => PAD.l + (v / maxValue)  * (W - PAD.l - PAD.r);
+  const toY = v => PAD.t + (1 - v / maxTraffic) * (H - PAD.t - PAD.b);
+  const toR = p => MIN_R + Math.sqrt(p / maxPages) * (MAX_R - MIN_R);
+
+  const fmtK = n => n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${n}`;
+  const fmtT = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n);
+
+  // Y ticks
+  const yTicks = [0, maxTraffic / 2, maxTraffic].map(v => ({ v, y: toY(v) }));
+  // X ticks
+  const xTicks = [0, maxValue / 4, maxValue / 2, (3 * maxValue) / 4, maxValue].map(v => ({ v, x: toX(v) }));
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
+      onMouseLeave={() => setHovered(null)}>
+      {/* Grid */}
+      {yTicks.map(({ v, y }, i) => (
+        <g key={i}>
+          <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke={BORDER} strokeWidth="0.5" strokeDasharray="3,3" />
+          <text x={PAD.l - 5} y={y + 3.5} textAnchor="end" fontSize="7.5" fill={MUTED}>{fmtT(v)}</text>
+        </g>
+      ))}
+      {xTicks.map(({ v, x }, i) => (
+        <text key={i} x={x} y={H - PAD.b + 11} textAnchor="middle" fontSize="7.5" fill={MUTED}>{fmtK(v)}</text>
+      ))}
+      {/* Axis labels */}
+      <text x={PAD.l - 40} y={(PAD.t + H - PAD.b) / 2} textAnchor="middle" fontSize="7.5" fill={MUTED}
+        transform={`rotate(-90, ${PAD.l - 40}, ${(PAD.t + H - PAD.b) / 2})`}>Organic traffic</text>
+      <text x={(PAD.l + W - PAD.r) / 2} y={H - 2} textAnchor="middle" fontSize="7.5" fill={MUTED}>Organic traffic value</text>
+      {/* Hint */}
+      <text x={(PAD.l + W - PAD.r) / 2} y={PAD.t - 10} textAnchor="middle" fontSize="7.5" fill={MUTED} fontStyle="italic">Circle size = Organic pages</text>
+
+      {/* Bubbles */}
+      {competitors.map((c, i) => {
+        const cx = toX(c.organic_traffic_value ?? 0);
+        const cy = toY(c.organic_traffic ?? 0);
+        const r  = toR(c.organic_pages ?? 0);
+        const color = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
+        const isHov = hovered === i;
+        return (
+          <g key={i} style={{ cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
+            <circle cx={cx} cy={cy} r={r} fill={color} opacity={isHov ? 0.9 : 0.75} stroke={isHov ? color : "none"} strokeWidth="2" />
+            {isHov && (() => {
+              const lines = [c.domain, `Traffic: ${fmtT(c.organic_traffic ?? 0)}`, `Value: ${fmtK(c.organic_traffic_value ?? 0)}`, `Pages: ${(c.organic_pages ?? 0).toLocaleString()}`];
+              const TW = Math.max(...lines.map(l => l.length * 5.8)) + 20;
+              const TH = lines.length * 14 + 10;
+              const tx = Math.min(Math.max(cx - TW / 2, PAD.l), W - PAD.r - TW);
+              const ty = Math.max(cy - r - TH - 6, PAD.t);
+              return (
+                <g pointerEvents="none">
+                  <rect x={tx} y={ty} width={TW} height={TH} rx="5" fill="#1E293B" opacity="0.93" />
+                  {lines.map((line, li) => (
+                    <text key={li} x={tx + 10} y={ty + 14 + li * 14} fontSize="9" fill={li === 0 ? "#fff" : "#CBD5E1"} fontWeight={li === 0 ? "700" : "400"}>{line}</text>
+                  ))}
+                </g>
+              );
+            })()}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── Multi-Line Chart ──────────────────────────────────────────────────────────
 function MultiLineChart({ data, series }) {
   // data: [{ label, date, features: { feat: N } }]
@@ -487,8 +565,9 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("refs",       () => getRefdomains(target)),
       safe("anchors",    () => getAnchors(target)),
       safe("backlinks",  () => getTopBacklinks(target)),
-      safe("serp",       () => getOrganicKeywords(target)),
-      safe("serptrend",  () => getSerpFeaturesHistory(target)),
+      safe("serp",        () => getOrganicKeywords(target)),
+      safe("serptrend",   () => getSerpFeaturesHistory(target)),
+      safe("competitors", () => getOrganicCompetitors(target)),
     ]);
 
     const merged = Object.assign({}, ...results);
@@ -1121,6 +1200,70 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                   </div>
                 )}
               </>
+            );
+          })()}
+
+          {/* ── Top Organic Competitors ── */}
+          {(() => {
+            const raw = data?.competitors;
+            const comps = raw?.competitors ?? raw?.domains ?? raw ?? [];
+            if (!Array.isArray(comps) || !comps.length) return null;
+            const totalKw = data?.serp?.keywords?.length
+              ? data.serp.keywords.reduce((s, k) => s + 1, 0)
+              : null;
+            const maxCommon = Math.max(...comps.map(c => c.common_keywords ?? 0), 1);
+            const fmtN = n => n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(0)}K` : String(n ?? 0);
+            return (
+              <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginTop: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>Top Organic Competitors</div>
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 16 }}>Domains competing for the same organic keywords. Circle size = organic pages.</div>
+
+                <BubbleChart competitors={comps} targetDomain={domain} />
+
+                {/* Table */}
+                <div style={{ marginTop: 20, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1.5px solid ${BORDER}` }}>
+                        <th style={{ textAlign: "left",  padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Domain</th>
+                        <th style={{ textAlign: "center", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Keyword overlap</th>
+                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Common KWs</th>
+                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Share</th>
+                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Competitor KWs</th>
+                        <th style={{ textAlign: "right", padding: "5px 8px", fontWeight: 700, color: MUTED, fontSize: 10 }}>Traffic</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comps.slice(0, 15).map((c, i) => {
+                        const color   = BUBBLE_COLORS[i % BUBBLE_COLORS.length];
+                        const overlap = c.common_keywords ?? 0;
+                        const total   = c.organic_keywords ?? 1;
+                        const share   = total > 0 ? ((overlap / maxCommon) * 100).toFixed(1) : "0.0";
+                        // Overlap bar: proportion of maxCommon
+                        const barW    = Math.round((overlap / maxCommon) * 80);
+                        return (
+                          <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                            <td style={{ padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+                              <span style={{ fontWeight: 600, color: TEXT }}>{c.domain}</span>
+                            </td>
+                            <td style={{ padding: "6px 8px" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
+                                <div style={{ height: 7, borderRadius: 3, background: color, width: barW, minWidth: 2 }} />
+                                <div style={{ height: 7, borderRadius: 3, background: "#E2E8F0", width: 80 - barW }} />
+                              </div>
+                            </td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 600, color: TEXT }}>{overlap.toLocaleString()}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{share}%</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.organic_keywords)}</td>
+                            <td style={{ padding: "6px 8px", textAlign: "right", color: MUTED }}>{fmtN(c.organic_traffic)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             );
           })()}
 

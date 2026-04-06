@@ -145,6 +145,16 @@ export async function getSerpFeaturesHistory(target) {
   );
 }
 
+export async function getOrganicCompetitors(target) {
+  return ahrefs("organic-competitors", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "domain,common_keywords,organic_keywords,organic_traffic,organic_traffic_value,organic_pages",
+    limit:    "20",
+    order_by: "common_keywords:desc",
+  });
+}
+
 export async function getOrganicKeywords(target) {
   return ahrefs("organic-keywords", {
     target:   stripProtocol(target),
