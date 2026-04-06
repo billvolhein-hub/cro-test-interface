@@ -452,10 +452,6 @@ function BubbleChart({ competitors, target }) {
             </svg>
             <strong style={{ color: TEXT }}>{target.domain}</strong> — target
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill={BUBBLE_COLORS[0]} opacity="0.75" /></svg>
-            competitors
-          </span>
         </div>
       )}
     </div>
