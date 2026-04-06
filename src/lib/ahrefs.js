@@ -109,6 +109,6 @@ export async function getOrganicKeywords(target) {
     date:     today(),
     select:   "keyword,best_position,volume,sum_traffic,best_position_url,serp_features,cpc,keyword_difficulty,is_branded,is_commercial,is_informational,is_transactional",
     limit:    "1000",
-    order_by: "traffic:desc",
+    order_by: "sum_traffic:desc",
   });
 }
