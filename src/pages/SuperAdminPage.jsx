@@ -114,17 +114,17 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Inter',sans-serif" }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, padding: "12px 28px", display: "flex", alignItems: "center", gap: 16, background: "#0F172A", boxShadow: "0 1px 6px rgba(0,0,0,.25)" }}>
+      <div style={{ borderBottom: `1px solid ${BORDER}`, padding: "12px 28px", display: "flex", alignItems: "center", gap: 16, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
         <img src="/platform-logo.avif" alt="Platform" style={{ height: 36, objectFit: "contain", flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)", letterSpacing: 1.5, textTransform: "uppercase" }}>Platform Admin</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,.85)" }}>Agency Management</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Platform Admin</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>Agency Management</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
             onClick={() => setShowSettings(s => !s)}
             title="Platform Settings"
-            style={{ background: showSettings ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, padding: "6px 10px", cursor: "pointer", color: "rgba(255,255,255,.7)", fontSize: 14 }}>
+            style={{ background: showSettings ? "#F1F5F9" : "none", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", color: MUTED, fontSize: 14 }}>
             ⚙
           </button>
           <button onClick={openCreate} style={{ ...BTN(ACCENT), padding: "8px 16px" }}>+ New Agency</button>
