@@ -122,9 +122,9 @@ export async function getSerpFeaturesHistory(target) {
         target:   stripProtocol(target),
         mode:     "domain",
         date,
-        select:   "keyword,serp_features,volume",
-        limit:    "500",
-        order_by: "volume:desc",
+        select:   "keyword,serp_features,sum_traffic",
+        limit:    "1000",
+        order_by: "sum_traffic:desc",
       }).then(data => {
         const keywords = data?.keywords ?? [];
         const features = {};
