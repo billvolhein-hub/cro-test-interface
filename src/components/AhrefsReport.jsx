@@ -285,19 +285,32 @@ function categorizeAnchor(anchor, domain) {
 
 // ── SERP Feature helpers ───────────────────────────────────────────────────────
 const SERP_META = {
-  featured_snippet:  { label: "Featured Snippet",  icon: "⭐", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Position 0 — highest-value capture opportunity" },
-  people_also_ask:   { label: "People Also Ask",   icon: "💬", color: "#0E7490", bg: "#ECFEFF", border: "#A5F3FC", desc: "Question-based content opportunity" },
-  image_pack:        { label: "Image Pack",        icon: "🖼",  color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add or optimise images for these queries" },
-  video:             { label: "Video Carousel",    icon: "▶️",  color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", desc: "Video content ranks prominently here" },
-  knowledge_panel:   { label: "Knowledge Panel",   icon: "📖", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", desc: "Brand/entity authority signal" },
-  local_pack:        { label: "Local Pack",        icon: "📍", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", desc: "Local SEO presence opportunity" },
-  shopping:          { label: "Shopping",          icon: "🛒", color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", desc: "Product listing opportunity" },
-  sitelinks:         { label: "Sitelinks",         icon: "🔗", color: "#0369A1", bg: "#F0F9FF", border: "#BAE6FD", desc: "Brand SERP dominance" },
-  top_stories:       { label: "Top Stories",       icon: "📰", color: "#475569", bg: "#F8FAFC", border: "#CBD5E1", desc: "News / PR content opportunity" },
-  twitter:           { label: "Twitter/X",         icon: "𝕏",  color: "#1E293B", bg: "#F8FAFC", border: "#E2E8F0", desc: "Social presence visible in SERP" },
-  faq:               { label: "FAQ",               icon: "❓", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Structured FAQ schema opportunity" },
-  review_snippet:    { label: "Review Snippet",    icon: "⭐", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add review schema markup" },
-  ads_top:           { label: "Paid Ads (top)",    icon: "💰", color: "#9CA3AF", bg: "#F9FAFB", border: "#E5E7EB", desc: "High commercial intent — paid competition" },
+  featured_snippet:       { label: "Featured Snippet",      icon: "⭐", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Position 0 — highest-value capture opportunity" },
+  people_also_ask:        { label: "People Also Ask",       icon: "💬", color: "#0E7490", bg: "#ECFEFF", border: "#A5F3FC", desc: "Question-based content opportunity" },
+  image_pack:             { label: "Image Pack",            icon: "🖼",  color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add or optimise images for these queries" },
+  video:                  { label: "Videos",                icon: "▶️",  color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", desc: "Video content ranks prominently here" },
+  knowledge_panel:        { label: "Knowledge Panel",       icon: "📖", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", desc: "Brand/entity authority signal" },
+  knowledge_card:         { label: "Knowledge Card",        icon: "🃏", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE", desc: "Quick-answer card for simple queries" },
+  local_pack:             { label: "Local Pack",            icon: "📍", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", desc: "Local SEO presence opportunity" },
+  shopping:               { label: "Shopping",              icon: "🛒", color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", desc: "Product listing opportunity" },
+  sitelinks:              { label: "Sitelinks",             icon: "🔗", color: "#0369A1", bg: "#F0F9FF", border: "#BAE6FD", desc: "Brand SERP dominance" },
+  top_stories:            { label: "Top Stories",           icon: "📰", color: "#475569", bg: "#F8FAFC", border: "#CBD5E1", desc: "News / PR content opportunity" },
+  twitter:                { label: "X (Twitter)",           icon: "𝕏",  color: "#1E293B", bg: "#F8FAFC", border: "#E2E8F0", desc: "Social presence visible in SERP" },
+  x_twitter:              { label: "X (Twitter)",           icon: "𝕏",  color: "#1E293B", bg: "#F8FAFC", border: "#E2E8F0", desc: "Social presence visible in SERP" },
+  faq:                    { label: "FAQ",                   icon: "❓", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE", desc: "Structured FAQ schema opportunity" },
+  review_snippet:         { label: "Review Snippet",        icon: "🌟", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add review schema markup" },
+  ai_overview:            { label: "AI Overview",           icon: "🤖", color: "#F97316", bg: "#FFF7ED", border: "#FED7AA", desc: "Generative AI answer — brand visibility risk/opportunity" },
+  ai_overviews:           { label: "AI Overview",           icon: "🤖", color: "#F97316", bg: "#FFF7ED", border: "#FED7AA", desc: "Generative AI answer — brand visibility risk/opportunity" },
+  discussions_and_forums: { label: "Discussions & Forums",  icon: "🗣",  color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC", desc: "Reddit / forum content competes here" },
+  discussions_forums:     { label: "Discussions & Forums",  icon: "🗣",  color: "#0891B2", bg: "#ECFEFF", border: "#A5F3FC", desc: "Reddit / forum content competes here" },
+  thumbnail:              { label: "Thumbnail",             icon: "🖼",  color: "#B45309", bg: "#FFFBEB", border: "#FDE68A", desc: "Rich result with image thumbnail" },
+  video_preview:          { label: "Video Preview",         icon: "🎬", color: "#BE123C", bg: "#FFF1F2", border: "#FECDD3", desc: "Video with inline preview in SERP" },
+  recipes:                { label: "Recipes",               icon: "🍽",  color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", desc: "Structured recipe schema opportunity" },
+  jobs_results:           { label: "Jobs",                  icon: "💼", color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE", desc: "Job listing schema opportunity" },
+  events:                 { label: "Events",                icon: "📅", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Event schema opportunity" },
+  ads_top:                { label: "Paid Ads (top)",        icon: "💰", color: "#9CA3AF", bg: "#F9FAFB", border: "#E5E7EB", desc: "High commercial intent — paid competition" },
+  paid_ads:               { label: "Paid Ads",              icon: "💰", color: "#9CA3AF", bg: "#F9FAFB", border: "#E5E7EB", desc: "Paid ads present on this SERP" },
+  related_searches:       { label: "Related Searches",      icon: "🔎", color: "#64748B", bg: "#F8FAFC", border: "#E2E8F0", desc: "Related query expansion" },
 };
 
 const OPPORTUNITY_FEATURES = ["featured_snippet", "people_also_ask", "faq", "image_pack", "video"];
@@ -896,60 +909,6 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     </ChartCard>
                   )}
 
-                  {/* SERP Feature Trend */}
-                  {(() => {
-                    const trend = data?.serptrend ?? [];
-                    if (!trend.length) return null;
-
-                    // Collect all features that appear in the trend data
-                    const allFeaturesInTrend = new Set();
-                    trend.forEach(month => Object.keys(month.features ?? {}).forEach(f => allFeaturesInTrend.add(f)));
-
-                    const trendSeries = [...allFeaturesInTrend]
-                      .filter(f => SERP_META[f])
-                      .map(f => ({
-                        key:    f,
-                        label:  SERP_META[f].label,
-                        color:  SERP_META[f].color,
-                        active: activeFeatures.has(f),
-                      }))
-                      .sort((a, b) => {
-                        // Sort by total count desc for ordering pills
-                        const aTotal = trend.reduce((s, m) => s + (m.features[a.key] ?? 0), 0);
-                        const bTotal = trend.reduce((s, m) => s + (m.features[b.key] ?? 0), 0);
-                        return bTotal - aTotal;
-                      });
-
-                    const toggleFeature = (key) => {
-                      setActiveFeatures(prev => {
-                        const next = new Set(prev);
-                        next.has(key) ? next.delete(key) : next.add(key);
-                        return next;
-                      });
-                    };
-
-                    return (
-                      <ChartCard title="SERP Feature Visibility — 12-Month Trend" hint="Number of ranking keywords triggering each SERP feature over the past 12 months. Click features to toggle.">
-                        {/* Feature toggle pills */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-                          {trendSeries.map(s => {
-                            const isOn = activeFeatures.has(s.key);
-                            const meta = SERP_META[s.key];
-                            return (
-                              <button key={s.key}
-                                onClick={() => toggleFeature(s.key)}
-                                style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", border: `1.5px solid ${isOn ? meta.color : BORDER}`, borderRadius: 6, background: isOn ? meta.bg : "#fff", cursor: "pointer", fontFamily: "'Inter',sans-serif", transition: "all .15s" }}>
-                                <div style={{ width: 10, height: 10, borderRadius: 2, background: isOn ? meta.color : "#D1D5DB", transition: "background .15s", flexShrink: 0 }} />
-                                <span style={{ fontSize: 11, fontWeight: 600, color: isOn ? meta.color : MUTED }}>{meta.icon} {meta.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <MultiLineChart data={trend} series={trendSeries} />
-                      </ChartCard>
-                    );
-                  })()}
-
                   {/* SERP feature SOV */}
                   {sovRows.length > 0 && (
                     <ChartCard title="SERP Feature Share of Voice" hint="% of ranking keywords where each feature appears. 'Owned' = you hold that feature position.">
@@ -972,6 +931,66 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     </ChartCard>
                   )}
                 </div>
+
+                {/* ── SERP Feature Trend — full width ── */}
+                {(() => {
+                  const trend = data?.serptrend ?? [];
+                  if (!trend.length) return null;
+
+                  const allFeaturesInTrend = new Set();
+                  trend.forEach(month => Object.keys(month.features ?? {}).forEach(f => allFeaturesInTrend.add(f)));
+
+                  // Deduplicate aliases (ai_overview / ai_overviews, twitter / x_twitter, etc.)
+                  const seen = new Set();
+                  const trendSeries = [...allFeaturesInTrend]
+                    .filter(f => {
+                      if (!SERP_META[f]) return false;
+                      const label = SERP_META[f].label;
+                      if (seen.has(label)) return false;
+                      seen.add(label);
+                      return true;
+                    })
+                    .map(f => ({
+                      key:    f,
+                      label:  SERP_META[f].label,
+                      color:  SERP_META[f].color,
+                      icon:   SERP_META[f].icon,
+                      bg:     SERP_META[f].bg,
+                      border: SERP_META[f].border,
+                      active: activeFeatures.has(f),
+                      total:  trend.reduce((s, m) => s + (m.features[f] ?? 0), 0),
+                    }))
+                    .sort((a, b) => b.total - a.total);
+
+                  const toggleFeature = key => setActiveFeatures(prev => {
+                    const next = new Set(prev);
+                    next.has(key) ? next.delete(key) : next.add(key);
+                    return next;
+                  });
+
+                  return (
+                    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginBottom: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 2 }}>SERP Feature Visibility — 12-Month Trend</div>
+                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 14 }}>Keywords triggering each SERP feature over time. Click to toggle features on/off.</div>
+
+                      {/* Toggle pills */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
+                        {trendSeries.map(s => {
+                          const isOn = activeFeatures.has(s.key);
+                          return (
+                            <button key={s.key} onClick={() => toggleFeature(s.key)}
+                              style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 11px", border: `1.5px solid ${isOn ? s.color : BORDER}`, borderRadius: 6, background: isOn ? s.bg : "#fff", cursor: "pointer", fontFamily: "'Inter',sans-serif", transition: "all .15s" }}>
+                              <div style={{ width: 10, height: 10, borderRadius: 2, background: isOn ? s.color : "#D1D5DB", flexShrink: 0, transition: "background .15s" }} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: isOn ? s.color : MUTED, whiteSpace: "nowrap" }}>{s.icon} {s.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <MultiLineChart data={trend} series={trendSeries} />
+                    </div>
+                  );
+                })()}
 
                 {/* ── Opportunity keywords ── */}
                 {oppKeywords.length > 0 && (
