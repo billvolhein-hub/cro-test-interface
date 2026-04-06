@@ -87,5 +87,7 @@ export default async function handler(req, res) {
     }
   } catch { /* non-fatal */ }
 
-  res.json({ inner, goalNames, startDate, endDate });
+  // Include a sample of the raw variation conversion_data for debugging field names
+  const sampleVariation = inner?.reportData?.[0]?.variations?.[0] ?? null;
+  res.json({ inner, goalNames, startDate, endDate, _debug_sample_variation: sampleVariation });
 }
