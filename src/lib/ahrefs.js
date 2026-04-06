@@ -153,7 +153,7 @@ export async function getOrganicCompetitors(target) {
     country:  "us",
     select:   "competitor_domain,keywords_common,keywords_competitor,traffic,value,pages,domain_rating,share",
     limit:    "20",
-    order_by: "common_keywords:desc",
+    order_by: "keywords_common:desc",
   });
 }
 
