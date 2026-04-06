@@ -419,9 +419,9 @@ export async function fetchConvertResults(experienceId) {
     throw Object.assign(new Error(msg), { raw: payload });
   }
 
-  const { inner, goalNames = {}, startDate = "", endDate = "", _debug_sample_variation } = payload;
-  if (_debug_sample_variation) {
-    console.log("[Convert] sample variation shape:", JSON.stringify(_debug_sample_variation, null, 2));
+  const { inner, goalNames = {}, startDate = "", endDate = "", _debug_all_variations } = payload;
+  if (_debug_all_variations) {
+    console.log("[Convert] all variation conversion_data:", JSON.stringify(_debug_all_variations, null, 2));
   }
 
   if (!inner?.reportData || !inner?.variations_data) {

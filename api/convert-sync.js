@@ -87,7 +87,10 @@ export default async function handler(req, res) {
     }
   } catch { /* non-fatal */ }
 
-  // Include a sample of the raw variation conversion_data for debugging field names
-  const sampleVariation = inner?.reportData?.[0]?.variations?.[0] ?? null;
-  res.json({ inner, goalNames, startDate, endDate, _debug_sample_variation: sampleVariation });
+  // Debug: all variations across all goals so we can see every conversion_data shape
+  const _debug_all_variations = (inner?.reportData ?? []).map(g => ({
+    goal_id: g.goal_id,
+    variations: (g.variations ?? []).map(v => ({ id: v.id, visitors: v.visitors, conversion_data: v.conversion_data })),
+  }));
+  res.json({ inner, goalNames, startDate, endDate, _debug_all_variations });
 }
