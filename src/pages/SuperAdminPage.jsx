@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAgencies, createAgency, updateAgency, deleteAgency } from "../lib/agencies";
+import { fetchAgencies, createAgency, updateAgency, deleteAgency, fetchPlatformConfig, setPlatformConfig } from "../lib/agencies";
 import { BG, BORDER, CARD, MUTED, TEXT, ACCENT } from "../lib/constants";
 
 const FIELD = { padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
@@ -14,10 +14,39 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
   const navigate   = useNavigate();
   const [agencies, setAgencies] = useState(initial ?? []);
   const [showForm, setShowForm] = useState(false);
-  const [editing,  setEditing]  = useState(null);   // agency id being edited
-  const [confirm,  setConfirm]  = useState(null);   // agency id pending delete
+  const [editing,  setEditing]  = useState(null);
+  const [confirm,  setConfirm]  = useState(null);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState("");
+
+  // Platform password management
+  const [pwDraft,   setPwDraft]   = useState("");
+  const [pwSaving,  setPwSaving]  = useState(false);
+  const [pwSaved,   setPwSaved]   = useState(false);
+  const [pwVisible, setPwVisible] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    fetchPlatformConfig().then(cfg => {
+      if (cfg.super_admin_password) setPwDraft(cfg.super_admin_password);
+    }).catch(() => {});
+  }, []);
+
+  const savePlatformPassword = async () => {
+    if (!pwDraft.trim()) return;
+    setPwSaving(true);
+    try {
+      await setPlatformConfig("super_admin_password", pwDraft.trim());
+      // Update localStorage so current session stays valid
+      localStorage.setItem("me_superadmin_auth", pwDraft.trim());
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   const defaultForm = { name: "", slug: "", adminPassword: "", bgColor: "#1B3A6B", accentColor: "#C9A84C", textColor: "#ffffff", logoUrl: "" };
   const [form, setForm] = useState(defaultForm);
@@ -85,22 +114,52 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Inter',sans-serif" }}>
       {/* Header */}
-      <div style={{ borderBottom: `1px solid ${BORDER}`, padding: "14px 28px", display: "flex", alignItems: "center", gap: 16, background: CARD, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-            <rect x="2"  y="10" width="8" height="22" rx="2" fill="#C9A84C"/>
-            <rect x="14" y="5"  width="8" height="27" rx="2" fill="#2A8C8C"/>
-            <rect x="26" y="1"  width="8" height="31" rx="2" fill="#1B3A6B"/>
-          </svg>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: TEXT }}>Platform Admin</div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase" }}>Agency Management</div>
-          </div>
+      <div style={{ borderBottom: `1px solid ${BORDER}`, padding: "12px 28px", display: "flex", alignItems: "center", gap: 16, background: "#0F172A", boxShadow: "0 1px 6px rgba(0,0,0,.25)" }}>
+        <img src="/platform-logo.avif" alt="Platform" style={{ height: 36, objectFit: "contain", flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)", letterSpacing: 1.5, textTransform: "uppercase" }}>Platform Admin</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,.85)" }}>Agency Management</div>
         </div>
-        <div style={{ marginLeft: "auto" }}>
-          <button onClick={openCreate} style={BTN(ACCENT)}>+ New Agency</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() => setShowSettings(s => !s)}
+            title="Platform Settings"
+            style={{ background: showSettings ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, padding: "6px 10px", cursor: "pointer", color: "rgba(255,255,255,.7)", fontSize: 14 }}>
+            ⚙
+          </button>
+          <button onClick={openCreate} style={{ ...BTN(ACCENT), padding: "8px 16px" }}>+ New Agency</button>
         </div>
       </div>
+
+      {/* Platform Settings panel */}
+      {showSettings && (
+        <div style={{ background: "#1E293B", borderBottom: "1px solid #334155", padding: "16px 28px", display: "flex", alignItems: "flex-end", gap: 24 }}>
+          <div style={{ flex: 1, maxWidth: 360 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>Platform Admin Password</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: 1, position: "relative" }}>
+                <input
+                  type={pwVisible ? "text" : "password"}
+                  value={pwDraft}
+                  onChange={e => setPwDraft(e.target.value)}
+                  placeholder="Set platform password…"
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 36px 8px 10px", borderRadius: 6, border: "1.5px solid #334155", background: "#0F172A", fontFamily: "'Inter',sans-serif", fontSize: 13, color: "#E2E8F0", outline: "none" }}
+                />
+                <button onClick={() => setPwVisible(v => !v)} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748B", fontSize: 11 }}>
+                  {pwVisible ? "Hide" : "Show"}
+                </button>
+              </div>
+              <button
+                onClick={savePlatformPassword}
+                disabled={pwSaving || !pwDraft.trim()}
+                style={{ ...BTN(pwSaved ? "#15803D" : ACCENT), padding: "8px 16px", opacity: pwSaving ? 0.7 : 1 }}>
+                {pwSaved ? "Saved ✓" : pwSaving ? "…" : "Save"}
+              </button>
+            </div>
+            <div style={{ fontSize: 10, color: "#475569", marginTop: 5 }}>Stored in DB — takes effect on next login</div>
+          </div>
+        </div>
+      )}
 
       {/* Impersonation banner */}
       {sessionStorage.getItem("me_superadmin_impersonating") && (

@@ -43,6 +43,23 @@ export async function deleteAgency(id) {
   if (error) throw error;
 }
 
+// ── Platform config (super admin password, etc.) ──────────────────────────────
+
+export async function fetchPlatformConfig() {
+  const { data } = await supabase.from("platform_config").select("*");
+  if (!data) return {};
+  return Object.fromEntries(data.map(r => [r.key, r.value]));
+}
+
+export async function setPlatformConfig(key, value) {
+  const { error } = await supabase
+    .from("platform_config")
+    .upsert({ key, value }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+// ── Agency logo upload ─────────────────────────────────────────────────────────
+
 export async function uploadAgencyLogo(agencyId, file) {
   const ext  = file.name.split(".").pop();
   const path = `${agencyId}/logo.${ext}`;

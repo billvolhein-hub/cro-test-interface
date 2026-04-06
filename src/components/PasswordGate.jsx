@@ -1,25 +1,45 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
+import { fetchPlatformConfig } from "../lib/agencies";
 
 // ── Super Admin Gate ──────────────────────────────────────────────────────────
 // Protects the platform-level agency management dashboard.
-// Password from VITE_SUPER_ADMIN_PASSWORD env var.
+// Password: DB platform_config.super_admin_password, fallback to env var.
 
-const SUPER_PW  = import.meta.env.VITE_SUPER_ADMIN_PASSWORD ?? "";
 const SUPER_KEY = "me_superadmin_auth";
 
 export function SuperAdminGate({ children }) {
-  const [authed, setAuthed] = useState(() =>
-    !SUPER_PW || localStorage.getItem(SUPER_KEY) === SUPER_PW
-  );
-  const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
+  const envPw = import.meta.env.VITE_SUPER_ADMIN_PASSWORD ?? "";
+  const [pw,      setPw]      = useState(envPw);
+  const [loading, setLoading] = useState(true);
+  const [authed,  setAuthed]  = useState(false);
+  const [input,   setInput]   = useState("");
+  const [error,   setError]   = useState(false);
 
-  if (authed) return children;
+  useEffect(() => {
+    fetchPlatformConfig().then(cfg => {
+      const dbPw = cfg.super_admin_password ?? "";
+      const resolved = dbPw || envPw;
+      setPw(resolved);
+      const stored = localStorage.getItem(SUPER_KEY);
+      if (!resolved || stored === resolved) setAuthed(true);
+      setLoading(false);
+    }).catch(() => {
+      // DB not set up yet — fall back to env var
+      const resolved = envPw;
+      setPw(resolved);
+      const stored = localStorage.getItem(SUPER_KEY);
+      if (!resolved || stored === resolved) setAuthed(true);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return null;
+  if (authed)  return children;
 
   const attempt = () => {
-    if (input === SUPER_PW) {
-      localStorage.setItem(SUPER_KEY, SUPER_PW);
+    if (input === pw) {
+      localStorage.setItem(SUPER_KEY, pw);
       setAuthed(true);
     } else {
       setError(true);
@@ -30,15 +50,10 @@ export function SuperAdminGate({ children }) {
   return (
     <GateScreen
       title="Platform Admin"
-      subtitle="Enter your super admin password"
+      subtitle="Enter your platform password to continue"
       logo={
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20, gap: 6 }}>
-          <svg width="52" height="52" viewBox="0 0 36 36" fill="none">
-            <rect x="2"  y="10" width="8" height="22" rx="2" fill="#C9A84C"/>
-            <rect x="14" y="5"  width="8" height="27" rx="2" fill="#2A8C8C"/>
-            <rect x="26" y="1"  width="8" height="31" rx="2" fill="#1B3A6B"/>
-          </svg>
-          <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: 2, textTransform: "uppercase" }}>White-Label Platform</div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20, gap: 8 }}>
+          <img src="/platform-logo.avif" alt="Platform" style={{ height: 48, objectFit: "contain" }} />
         </div>
       }
       input={input} setInput={setInput} error={error} setError={setError} onSubmit={attempt}
