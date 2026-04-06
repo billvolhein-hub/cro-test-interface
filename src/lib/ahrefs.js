@@ -150,6 +150,7 @@ export async function getOrganicCompetitors(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     date:     today(),
+    country:  "us",
     select:   "domain,common_keywords,organic_keywords,organic_traffic,organic_traffic_value,organic_pages",
     limit:    "20",
     order_by: "common_keywords:desc",
