@@ -3,6 +3,7 @@ import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
   getBacklinksHistory, getRefdomains, getAnchors, getTopBacklinks,
+  getOrganicKeywords,
 } from "../lib/ahrefs";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -282,6 +283,53 @@ function categorizeAnchor(anchor, domain) {
   return "keyword-rich";
 }
 
+// ── SERP Feature helpers ───────────────────────────────────────────────────────
+const SERP_META = {
+  featured_snippet:  { label: "Featured Snippet",  icon: "⭐", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Position 0 — highest-value capture opportunity" },
+  people_also_ask:   { label: "People Also Ask",   icon: "💬", color: "#0E7490", bg: "#ECFEFF", border: "#A5F3FC", desc: "Question-based content opportunity" },
+  image_pack:        { label: "Image Pack",        icon: "🖼",  color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add or optimise images for these queries" },
+  video:             { label: "Video Carousel",    icon: "▶️",  color: "#DC2626", bg: "#FEF2F2", border: "#FECACA", desc: "Video content ranks prominently here" },
+  knowledge_panel:   { label: "Knowledge Panel",   icon: "📖", color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE", desc: "Brand/entity authority signal" },
+  local_pack:        { label: "Local Pack",        icon: "📍", color: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0", desc: "Local SEO presence opportunity" },
+  shopping:          { label: "Shopping",          icon: "🛒", color: "#EA580C", bg: "#FFF7ED", border: "#FED7AA", desc: "Product listing opportunity" },
+  sitelinks:         { label: "Sitelinks",         icon: "🔗", color: "#0369A1", bg: "#F0F9FF", border: "#BAE6FD", desc: "Brand SERP dominance" },
+  top_stories:       { label: "Top Stories",       icon: "📰", color: "#475569", bg: "#F8FAFC", border: "#CBD5E1", desc: "News / PR content opportunity" },
+  twitter:           { label: "Twitter/X",         icon: "𝕏",  color: "#1E293B", bg: "#F8FAFC", border: "#E2E8F0", desc: "Social presence visible in SERP" },
+  faq:               { label: "FAQ",               icon: "❓", color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE", desc: "Structured FAQ schema opportunity" },
+  review_snippet:    { label: "Review Snippet",    icon: "⭐", color: "#D97706", bg: "#FFFBEB", border: "#FDE68A", desc: "Add review schema markup" },
+  ads_top:           { label: "Paid Ads (top)",    icon: "💰", color: "#9CA3AF", bg: "#F9FAFB", border: "#E5E7EB", desc: "High commercial intent — paid competition" },
+};
+
+const OPPORTUNITY_FEATURES = ["featured_snippet", "people_also_ask", "faq", "image_pack", "video"];
+
+function normaliseSerpFeatures(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(f => (typeof f === "string" ? f.toLowerCase().replace(/ /g, "_") : String(f)));
+  if (typeof raw === "string") return raw.split(",").map(f => f.trim().toLowerCase().replace(/ /g, "_"));
+  return [];
+}
+
+function exportSerpCSV(keywords, domainName) {
+  const header = ["Keyword", "Position", "Volume", "Traffic", "URL", "CPC", "SERP Features"];
+  const rows = keywords.map(k => [
+    `"${(k.keyword ?? "").replace(/"/g, '""')}"`,
+    k.position ?? "",
+    k.volume ?? "",
+    k.traffic ?? "",
+    `"${(k.url ?? "").replace(/"/g, '""')}"`,
+    k.cpc ?? "",
+    `"${normaliseSerpFeatures(k.serp_features).join(", ")}"`,
+  ]);
+  const csv = [header, ...rows].map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `${domainName ?? "keywords"}-serp-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Loading Skeleton ──────────────────────────────────────────────────────────
 function Skeleton({ h = 80 }) {
   return (
@@ -328,6 +376,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("refs",       () => getRefdomains(target)),
       safe("anchors",    () => getAnchors(target)),
       safe("backlinks",  () => getTopBacklinks(target)),
+      safe("serp",       () => getOrganicKeywords(target)),
     ]);
 
     const merged = Object.assign({}, ...results);
@@ -591,6 +640,136 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
               )}
             </div>
           )}
+
+          {/* ── SERP Intelligence ── */}
+          {(() => {
+            const keywords = data?.serp?.keywords ?? data?.serp?.organic_keywords ?? [];
+            if (errors.serp && !keywords.length) return <ErrBox msg={`SERP data: ${errors.serp}`} />;
+            if (!keywords.length) return null;
+
+            // Build feature frequency map
+            const featureCount = {};
+            const featureTraffic = {};
+            keywords.forEach(kw => {
+              const features = normaliseSerpFeatures(kw.serp_features);
+              features.forEach(f => {
+                featureCount[f] = (featureCount[f] || 0) + 1;
+                featureTraffic[f] = (featureTraffic[f] || 0) + (kw.traffic ?? 0);
+              });
+            });
+
+            const totalKw    = keywords.length;
+            const totalTraffic = keywords.reduce((s, k) => s + (k.traffic ?? 0), 0);
+
+            // Share of Voice rows — sorted by keyword count desc
+            const sovRows = Object.entries(featureCount)
+              .sort((a, b) => b[1] - a[1])
+              .map(([feat, count]) => {
+                const meta = SERP_META[feat] ?? { label: feat.replace(/_/g, " "), icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER };
+                return { feat, meta, count, pct: Math.round((count / totalKw) * 100), traffic: featureTraffic[feat] ?? 0 };
+              });
+
+            // Opportunity keywords: those with high-value features, top 20 by traffic
+            const oppKeywords = keywords
+              .filter(kw => normaliseSerpFeatures(kw.serp_features).some(f => OPPORTUNITY_FEATURES.includes(f)))
+              .slice(0, 20);
+
+            // Feature summary for top-of-section stat cards
+            const hasFeatSnip = featureCount["featured_snippet"] ?? 0;
+            const hasPAA      = featureCount["people_also_ask"]  ?? 0;
+            const hasVideo    = featureCount["video"]            ?? 0;
+            const hasLocal    = featureCount["local_pack"]       ?? 0;
+
+            return (
+              <>
+                <SectionHeader title="SERP Intelligence" color={PURPLE} />
+
+                {/* Summary stat strip */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+                  <StatCard label="Keywords Tracked"   value={fmtNum(totalKw)}      sub="top 1000 by traffic" color={TEXT}   />
+                  <StatCard label="Est. Organic Traffic" value={fmtNum(totalTraffic)} sub="monthly visits"     color={GREEN} bg="#F0FDF4" border="#BBF7D0" />
+                  {hasFeatSnip > 0 && <StatCard label="Featured Snippets" value={hasFeatSnip} sub="keywords"  color="#7C3AED" bg="#F5F3FF" border="#DDD6FE" />}
+                  {hasPAA > 0      && <StatCard label="People Also Ask"   value={hasPAA}      sub="keywords"  color={TEAL}   bg="#ECFEFF" border="#A5F3FC" />}
+                  {hasVideo > 0    && <StatCard label="Video Carousels"   value={hasVideo}    sub="keywords"  color={RED}    bg="#FEF2F2" border="#FECACA" />}
+                  {hasLocal > 0    && <StatCard label="Local Pack"        value={hasLocal}    sub="keywords"  color={GREEN}  bg="#F0FDF4" border="#BBF7D0" />}
+                </div>
+
+                {/* Share of Voice breakdown */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                  <ChartCard title="Share of Voice — SERP Feature Distribution" hint="% of your ranking keywords where each SERP feature appears. Higher % = higher opportunity or competition.">
+                    {sovRows.length === 0
+                      ? <div style={{ fontSize: 11, color: MUTED }}>No SERP feature data available</div>
+                      : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {sovRows.map(({ feat, meta, count, pct, traffic }) => (
+                            <div key={feat}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: meta.color, flex: 1 }}>{meta.label}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: 4, padding: "1px 6px" }}>{pct}%</span>
+                                <span style={{ fontSize: 10, color: MUTED }}>{count.toLocaleString()} kw</span>
+                              </div>
+                              <div style={{ height: 6, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", background: meta.color, borderRadius: 4, transition: "width .4s ease" }} />
+                              </div>
+                              {meta.desc && <div style={{ fontSize: 9, color: MUTED, marginTop: 2 }}>{meta.desc}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                  </ChartCard>
+
+                  {/* Opportunity keyword table */}
+                  {oppKeywords.length > 0 && (
+                    <ChartCard title="Opportunity Keywords" hint="Keywords triggering high-value features (Featured Snippet, PAA, FAQ, Image Pack, Video). Prioritise content around these.">
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {oppKeywords.map((kw, i) => {
+                          const features = normaliseSerpFeatures(kw.serp_features).filter(f => OPPORTUNITY_FEATURES.includes(f));
+                          return (
+                            <div key={i} style={{ paddingBottom: 8, borderBottom: i < oppKeywords.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: TEXT, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw.keyword}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, flexShrink: 0 }}>#{kw.position}</span>
+                              </div>
+                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                                {features.map(f => {
+                                  const meta = SERP_META[f] ?? { label: f, icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER };
+                                  return (
+                                    <span key={f} style={{ fontSize: 9, fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: 3, padding: "1px 5px" }}>
+                                      {meta.icon} {meta.label}
+                                    </span>
+                                  );
+                                })}
+                                <span style={{ fontSize: 9, color: MUTED, marginLeft: "auto" }}>
+                                  {fmtNum(kw.volume)}/mo · {fmtNum(kw.traffic)} visits
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </ChartCard>
+                  )}
+                </div>
+
+                {/* Export row */}
+                {!isPortal && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "12px 14px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>Reporting Export</div>
+                      <div style={{ fontSize: 11, color: MUTED }}>Download all {totalKw.toLocaleString()} keywords with SERP features as CSV for Google Sheets or executive reporting.</div>
+                    </div>
+                    <button
+                      onClick={() => exportSerpCSV(keywords, domain)}
+                      style={{ padding: "8px 16px", borderRadius: 7, border: `1.5px solid ${ACCENT}`, background: "#fff", color: ACCENT, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      ↓ Export CSV
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
         </div>
       )}

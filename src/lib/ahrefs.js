@@ -101,3 +101,13 @@ export async function getBacklinksNewLost(target) {
     history_grouping: "weekly",
   });
 }
+
+export async function getOrganicKeywords(target) {
+  return ahrefs("organic-keywords", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "keyword,position,volume,traffic,url,serp_features,cpc",
+    limit:    "1000",
+    order_by: "traffic:desc",
+  });
+}
