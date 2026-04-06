@@ -3,7 +3,7 @@ import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
   getBacklinksHistory, getRefdomains, getAnchors, getTopBacklinks,
-  getOrganicKeywords,
+  getOrganicKeywords, getSerpFeaturesHistory,
 } from "../lib/ahrefs";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -335,6 +335,98 @@ function exportSerpCSV(keywords, domainName) {
   URL.revokeObjectURL(url);
 }
 
+// ── Multi-Line Chart ──────────────────────────────────────────────────────────
+function MultiLineChart({ data, series }) {
+  // data: [{ label, date, features: { feat: N } }]
+  // series: [{ key, label, color, active }]
+  const [hovered, setHovered] = useState(null);
+  const activeSeries = series.filter(s => s.active);
+  if (!data?.length || !activeSeries.length) return <div style={{ fontSize: 11, color: MUTED, padding: "20px 0", textAlign: "center" }}>Select at least one feature above.</div>;
+
+  const W = 520, H = 180, PAD = { t: 12, r: 16, b: 28, l: 44 };
+  const allVals = activeSeries.flatMap(s => data.map(d => d.features?.[s.key] ?? 0));
+  const maxVal  = Math.max(...allVals, 1);
+  const toX = i => PAD.l + (i / (data.length - 1)) * (W - PAD.l - PAD.r);
+  const toY = v => PAD.t + (1 - v / maxVal) * (H - PAD.t - PAD.b);
+  const yTicks = [0, maxVal / 2, maxVal].map(v => ({ v: Math.round(v), y: toY(v) }));
+  const xTicks = [0, 2, 5, 8, 11].filter(i => i < data.length);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block", overflow: "visible" }}
+      onMouseLeave={() => setHovered(null)}>
+      <defs>
+        {activeSeries.map(s => (
+          <linearGradient key={s.key} id={`mlg-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={s.color} stopOpacity="0.12" />
+            <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+          </linearGradient>
+        ))}
+      </defs>
+
+      {/* Grid */}
+      {yTicks.map(({ y, v }, i) => (
+        <g key={i}>
+          <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke={BORDER} strokeWidth="0.5" strokeDasharray="3,3" />
+          <text x={PAD.l - 4} y={y + 3.5} textAnchor="end" fontSize="7" fill={MUTED}>{v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}</text>
+        </g>
+      ))}
+
+      {/* Area fills */}
+      {activeSeries.map(s => {
+        const area = `M${toX(0)},${H - PAD.b} ` +
+          data.map((d, i) => `L${toX(i)},${toY(d.features?.[s.key] ?? 0)}`).join(" ") +
+          ` L${toX(data.length - 1)},${H - PAD.b} Z`;
+        return <path key={s.key} d={area} fill={`url(#mlg-${s.key})`} />;
+      })}
+
+      {/* Lines */}
+      {activeSeries.map(s => {
+        const pts = data.map((d, i) => `${toX(i)},${toY(d.features?.[s.key] ?? 0)}`).join(" ");
+        return <polyline key={s.key} points={pts} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />;
+      })}
+
+      {/* Hover zones */}
+      {data.map((_, i) => (
+        <rect key={i} x={i === 0 ? 0 : (toX(i - 1) + toX(i)) / 2} y={PAD.t}
+          width={i === 0 ? (toX(1) - toX(0)) / 2 : i === data.length - 1 ? (toX(i) - toX(i - 1)) / 2 + PAD.r : (toX(i + 1) - toX(i - 1)) / 2}
+          height={H - PAD.t - PAD.b}
+          fill="transparent" style={{ cursor: "crosshair" }}
+          onMouseEnter={() => setHovered(i)} />
+      ))}
+
+      {/* Hover overlay */}
+      {hovered !== null && (() => {
+        const cx = toX(hovered);
+        const d  = data[hovered];
+        const lines = [d.label, ...activeSeries.map(s => `${s.label}: ${(d.features?.[s.key] ?? 0).toLocaleString()}`)];
+        const TW = Math.max(...lines.map(l => l.length * 5.8)) + 20;
+        const TH = lines.length * 14 + 10;
+        const tx = Math.min(Math.max(cx - TW / 2, PAD.l), W - PAD.r - TW);
+        const ty = PAD.t;
+        return (
+          <g>
+            <line x1={cx} y1={PAD.t} x2={cx} y2={H - PAD.b} stroke={MUTED} strokeWidth="1" strokeDasharray="4,3" pointerEvents="none" />
+            {activeSeries.map(s => (
+              <circle key={s.key} cx={cx} cy={toY(d.features?.[s.key] ?? 0)} r="3.5" fill={s.color} stroke="#fff" strokeWidth="1.5" pointerEvents="none" />
+            ))}
+            <g pointerEvents="none">
+              <rect x={tx} y={ty} width={TW} height={TH} rx="5" fill="#1E293B" opacity="0.93" />
+              {lines.map((line, li) => (
+                <text key={li} x={tx + 10} y={ty + 14 + li * 14} fontSize="9" fill={li === 0 ? "#fff" : (activeSeries[li - 1]?.color ?? "#fff")} fontWeight={li === 0 ? "700" : "600"}>{line}</text>
+              ))}
+            </g>
+          </g>
+        );
+      })()}
+
+      {/* X labels */}
+      {xTicks.map(i => (
+        <text key={i} x={toX(i)} y={H - PAD.b + 11} textAnchor="middle" fontSize="7" fill={MUTED}>{data[i]?.label}</text>
+      ))}
+    </svg>
+  );
+}
+
 // ── Loading Skeleton ──────────────────────────────────────────────────────────
 function Skeleton({ h = 80 }) {
   return (
@@ -344,11 +436,12 @@ function Skeleton({ h = 80 }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchComplete, onSave, savedData, isPortal }, ref) {
-  const [domain,   setDomain]   = useState(savedData?.domain || defaultDomain || "");
-  const [loading,  setLoading]  = useState(false);
-  const [data,     setData]     = useState(savedData?.data   || null);
-  const [errors,   setErrors]   = useState(savedData?.errors || {});
-  const [open,     setOpen]     = useState(false);
+  const [domain,         setDomain]         = useState(savedData?.domain || defaultDomain || "");
+  const [loading,        setLoading]        = useState(false);
+  const [data,           setData]           = useState(savedData?.data   || null);
+  const [errors,         setErrors]         = useState(savedData?.errors || {});
+  const [open,           setOpen]           = useState(false);
+  const [activeFeatures, setActiveFeatures] = useState(new Set(["people_also_ask", "featured_snippet", "image_pack", "video"]));
   const onSaveRef = useRef(onSave);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
 
@@ -382,6 +475,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("anchors",    () => getAnchors(target)),
       safe("backlinks",  () => getTopBacklinks(target)),
       safe("serp",       () => getOrganicKeywords(target)),
+      safe("serptrend",  () => getSerpFeaturesHistory(target)),
     ]);
 
     const merged = Object.assign({}, ...results);
@@ -801,6 +895,60 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       </table>
                     </ChartCard>
                   )}
+
+                  {/* SERP Feature Trend */}
+                  {(() => {
+                    const trend = data?.serptrend ?? [];
+                    if (!trend.length) return null;
+
+                    // Collect all features that appear in the trend data
+                    const allFeaturesInTrend = new Set();
+                    trend.forEach(month => Object.keys(month.features ?? {}).forEach(f => allFeaturesInTrend.add(f)));
+
+                    const trendSeries = [...allFeaturesInTrend]
+                      .filter(f => SERP_META[f])
+                      .map(f => ({
+                        key:    f,
+                        label:  SERP_META[f].label,
+                        color:  SERP_META[f].color,
+                        active: activeFeatures.has(f),
+                      }))
+                      .sort((a, b) => {
+                        // Sort by total count desc for ordering pills
+                        const aTotal = trend.reduce((s, m) => s + (m.features[a.key] ?? 0), 0);
+                        const bTotal = trend.reduce((s, m) => s + (m.features[b.key] ?? 0), 0);
+                        return bTotal - aTotal;
+                      });
+
+                    const toggleFeature = (key) => {
+                      setActiveFeatures(prev => {
+                        const next = new Set(prev);
+                        next.has(key) ? next.delete(key) : next.add(key);
+                        return next;
+                      });
+                    };
+
+                    return (
+                      <ChartCard title="SERP Feature Visibility — 12-Month Trend" hint="Number of ranking keywords triggering each SERP feature over the past 12 months. Click features to toggle.">
+                        {/* Feature toggle pills */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                          {trendSeries.map(s => {
+                            const isOn = activeFeatures.has(s.key);
+                            const meta = SERP_META[s.key];
+                            return (
+                              <button key={s.key}
+                                onClick={() => toggleFeature(s.key)}
+                                style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", border: `1.5px solid ${isOn ? meta.color : BORDER}`, borderRadius: 6, background: isOn ? meta.bg : "#fff", cursor: "pointer", fontFamily: "'Inter',sans-serif", transition: "all .15s" }}>
+                                <div style={{ width: 10, height: 10, borderRadius: 2, background: isOn ? meta.color : "#D1D5DB", transition: "background .15s", flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, fontWeight: 600, color: isOn ? meta.color : MUTED }}>{meta.icon} {meta.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <MultiLineChart data={trend} series={trendSeries} />
+                      </ChartCard>
+                    );
+                  })()}
 
                   {/* SERP feature SOV */}
                   {sovRows.length > 0 && (

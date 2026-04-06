@@ -102,6 +102,49 @@ export async function getBacklinksNewLost(target) {
   });
 }
 
+export async function getSerpFeaturesHistory(target) {
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    months.push(d.toISOString().split("T")[0]);
+  }
+  function norm(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map(f => typeof f === "string" ? f.toLowerCase().replace(/ /g, "_") : String(f));
+    if (typeof raw === "string") return raw.split(",").map(f => f.trim().toLowerCase().replace(/ /g, "_"));
+    return [];
+  }
+  return Promise.all(
+    months.map(date =>
+      ahrefs("organic-keywords", {
+        target:   stripProtocol(target),
+        mode:     "domain",
+        date,
+        select:   "keyword,serp_features,volume",
+        limit:    "500",
+        order_by: "volume:desc",
+      }).then(data => {
+        const keywords = data?.keywords ?? [];
+        const features = {};
+        keywords.forEach(kw => norm(kw.serp_features).forEach(f => { features[f] = (features[f] || 0) + 1; }));
+        return {
+          date,
+          label: new Date(date + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
+          features,
+          total: keywords.length,
+        };
+      }).catch(() => ({
+        date,
+        label: new Date(date + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
+        features: {},
+        total: 0,
+      }))
+    )
+  );
+}
+
 export async function getOrganicKeywords(target) {
   return ahrefs("organic-keywords", {
     target:   stripProtocol(target),
