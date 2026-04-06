@@ -107,7 +107,7 @@ export async function getOrganicKeywords(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     date:     today(),
-    select:   "keyword,best_position,volume,sum_traffic,best_position_url,serp_features,cpc,keyword_difficulty,is_branded,is_commercial,is_informational,is_transactional",
+    select:   "keyword,best_position,best_position_kind,volume,sum_traffic,best_position_url,serp_features,cpc,keyword_difficulty,is_branded,is_commercial,is_informational,is_transactional,is_navigational,is_local",
     limit:    "1000",
     order_by: "sum_traffic:desc",
   });

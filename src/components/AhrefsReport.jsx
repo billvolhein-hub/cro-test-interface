@@ -652,121 +652,294 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
             if (errors.serp && !keywords.length) return <ErrBox msg={`SERP data: ${errors.serp}`} />;
             if (!keywords.length) return null;
 
-            // Build feature frequency map
-            const featureCount = {};
+            const totalKw     = keywords.length;
+            const totalTraffic = keywords.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
+            const avgPos      = Math.round(keywords.reduce((s, k) => s + (k.best_position ?? 0), 0) / totalKw);
+
+            // ── Position buckets ──────────────────────────────────────────────
+            const POS_BUCKETS = [
+              { label: "Top 3",   min: 1,  max: 3,  color: GREEN,  bg: "#F0FDF4", border: "#BBF7D0" },
+              { label: "4–10",    min: 4,  max: 10, color: BLUE,   bg: "#EFF6FF", border: "#BFDBFE" },
+              { label: "11–20",   min: 11, max: 20, color: AMBER,  bg: "#FFFBEB", border: "#FDE68A" },
+              { label: "21–50",   min: 21, max: 50, color: PURPLE, bg: "#F5F3FF", border: "#DDD6FE" },
+              { label: "51+",     min: 51, max: 999,color: "#9CA3AF", bg: "#F9FAFB", border: "#E5E7EB" },
+            ];
+            const posBuckets = POS_BUCKETS.map(b => ({
+              ...b,
+              count:   keywords.filter(k => k.best_position >= b.min && k.best_position <= b.max).length,
+              traffic: keywords.filter(k => k.best_position >= b.min && k.best_position <= b.max).reduce((s, k) => s + (k.sum_traffic ?? 0), 0),
+            }));
+            const maxBucketCount = Math.max(...posBuckets.map(b => b.count), 1);
+
+            // ── Intent breakdown ──────────────────────────────────────────────
+            const INTENTS = [
+              { key: "branded",       label: "Branded",       flag: k => k.is_branded,       color: BLUE   },
+              { key: "informational", label: "Informational", flag: k => k.is_informational, color: TEAL   },
+              { key: "commercial",    label: "Commercial",    flag: k => k.is_commercial,    color: AMBER  },
+              { key: "transactional", label: "Transactional", flag: k => k.is_transactional, color: GREEN  },
+              { key: "navigational",  label: "Navigational",  flag: k => k.is_navigational,  color: PURPLE },
+              { key: "local",         label: "Local",         flag: k => k.is_local,         color: RED    },
+            ];
+            const intentRows = INTENTS.map(intent => {
+              const kws = keywords.filter(intent.flag);
+              return { ...intent, count: kws.length, traffic: kws.reduce((s, k) => s + (k.sum_traffic ?? 0), 0) };
+            }).filter(r => r.count > 0).sort((a, b) => b.traffic - a.traffic);
+
+            // ── SERP feature map ──────────────────────────────────────────────
+            const featureCount   = {};
             const featureTraffic = {};
+            const ownedFeatures  = new Set(); // features where best_position_kind === feature
             keywords.forEach(kw => {
               const features = normaliseSerpFeatures(kw.serp_features);
               features.forEach(f => {
-                featureCount[f] = (featureCount[f] || 0) + 1;
-                featureTraffic[f] = (featureTraffic[f] || 0) + (kw.traffic ?? 0);
+                featureCount[f]   = (featureCount[f] || 0) + 1;
+                featureTraffic[f] = (featureTraffic[f] || 0) + (kw.sum_traffic ?? 0);
               });
+              if (kw.best_position_kind && kw.best_position_kind !== "organic") {
+                ownedFeatures.add(kw.best_position_kind.toLowerCase().replace(/ /g, "_"));
+              }
             });
-
-            const totalKw    = keywords.length;
-            const totalTraffic = keywords.reduce((s, k) => s + (k.sum_traffic ?? 0), 0);
-
-            // Share of Voice rows — sorted by keyword count desc
             const sovRows = Object.entries(featureCount)
               .sort((a, b) => b[1] - a[1])
+              .slice(0, 10)
               .map(([feat, count]) => {
-                const meta = SERP_META[feat] ?? { label: feat.replace(/_/g, " "), icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER };
-                return { feat, meta, count, pct: Math.round((count / totalKw) * 100), traffic: featureTraffic[feat] ?? 0 };
+                const meta = SERP_META[feat] ?? { label: feat.replace(/_/g, " "), icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER, desc: "" };
+                const owned = ownedFeatures.has(feat);
+                return { feat, meta, count, pct: Math.round((count / totalKw) * 100), traffic: featureTraffic[feat] ?? 0, owned };
               });
 
-            // Opportunity keywords: those with high-value features, top 20 by traffic
+            // ── Opportunity keywords ──────────────────────────────────────────
             const oppKeywords = keywords
               .filter(kw => normaliseSerpFeatures(kw.serp_features).some(f => OPPORTUNITY_FEATURES.includes(f)))
-              .slice(0, 20);
+              .slice(0, 15);
 
-            // Feature summary for top-of-section stat cards
-            const hasFeatSnip = featureCount["featured_snippet"] ?? 0;
-            const hasPAA      = featureCount["people_also_ask"]  ?? 0;
-            const hasVideo    = featureCount["video"]            ?? 0;
-            const hasLocal    = featureCount["local_pack"]       ?? 0;
+            // ── Top pages ─────────────────────────────────────────────────────
+            const pageMap = {};
+            keywords.forEach(kw => {
+              const url = kw.best_position_url ?? "";
+              if (!url) return;
+              if (!pageMap[url]) pageMap[url] = { url, traffic: 0, keywords: 0 };
+              pageMap[url].traffic  += kw.sum_traffic ?? 0;
+              pageMap[url].keywords += 1;
+            });
+            const topPages = Object.values(pageMap).sort((a, b) => b.traffic - a.traffic).slice(0, 10);
+
+            // ── Top keywords ──────────────────────────────────────────────────
+            const topKeywords = [...keywords].slice(0, 15);
 
             return (
               <>
-                <SectionHeader title="SERP Intelligence" color={PURPLE} />
+                <SectionHeader title="Organic Search Intelligence" color={PURPLE} />
 
-                {/* Summary stat strip */}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-                  <StatCard label="Keywords Tracked"   value={fmtNum(totalKw)}      sub="top 1000 by traffic" color={TEXT}   />
-                  <StatCard label="Est. Organic Traffic" value={fmtNum(totalTraffic)} sub="monthly visits"     color={GREEN} bg="#F0FDF4" border="#BBF7D0" />
-                  {hasFeatSnip > 0 && <StatCard label="Featured Snippets" value={hasFeatSnip} sub="keywords"  color="#7C3AED" bg="#F5F3FF" border="#DDD6FE" />}
-                  {hasPAA > 0      && <StatCard label="People Also Ask"   value={hasPAA}      sub="keywords"  color={TEAL}   bg="#ECFEFF" border="#A5F3FC" />}
-                  {hasVideo > 0    && <StatCard label="Video Carousels"   value={hasVideo}    sub="keywords"  color={RED}    bg="#FEF2F2" border="#FECACA" />}
-                  {hasLocal > 0    && <StatCard label="Local Pack"        value={hasLocal}    sub="keywords"  color={GREEN}  bg="#F0FDF4" border="#BBF7D0" />}
+                {/* ── Summary stats ── */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                  <StatCard label="Keywords"       value={fmtNum(totalKw)}      sub="tracked"          color={TEXT}   />
+                  <StatCard label="Organic Traffic" value={fmtNum(totalTraffic)} sub="est. monthly"     color={GREEN}  bg="#F0FDF4" border="#BBF7D0" />
+                  <StatCard label="Avg. Position"  value={avgPos}               sub="across all kw"    color={BLUE}   bg="#EFF6FF" border="#BFDBFE" />
+                  <StatCard label="Top 3 Keywords" value={posBuckets[0].count}  sub={fmtNum(posBuckets[0].traffic)+" visits"} color={GREEN} bg="#F0FDF4" border="#BBF7D0" />
+                  <StatCard label="Top 10 Keywords" value={posBuckets[0].count + posBuckets[1].count} sub="positions 1–10" color={BLUE} bg="#EFF6FF" border="#BFDBFE" />
                 </div>
 
-                {/* Share of Voice breakdown */}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                  <ChartCard title="Share of Voice — SERP Feature Distribution" hint="% of your ranking keywords where each SERP feature appears. Higher % = higher opportunity or competition.">
-                    {sovRows.length === 0
-                      ? <div style={{ fontSize: 11, color: MUTED }}>No SERP feature data available</div>
-                      : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {sovRows.map(({ feat, meta, count, pct, traffic }) => (
-                            <div key={feat}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                <span style={{ fontSize: 13 }}>{meta.icon}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: meta.color, flex: 1 }}>{meta.label}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: 4, padding: "1px 6px" }}>{pct}%</span>
-                                <span style={{ fontSize: 10, color: MUTED }}>{count.toLocaleString()} kw</span>
-                              </div>
-                              <div style={{ height: 6, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
-                                <div style={{ width: `${pct}%`, height: "100%", background: meta.color, borderRadius: 4, transition: "width .4s ease" }} />
-                              </div>
-                              {meta.desc && <div style={{ fontSize: 9, color: MUTED, marginTop: 2 }}>{meta.desc}</div>}
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    }
-                  </ChartCard>
+                {/* ── Position distribution ── */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 8 }}>Position Distribution</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                    {posBuckets.map(b => (
+                      <div key={b.label} style={{ flex: "1 1 80px", background: b.bg, border: `1.5px solid ${b.border}`, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: b.color, lineHeight: 1 }}>{b.count.toLocaleString()}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: b.color, textTransform: "uppercase", letterSpacing: 0.6, marginTop: 3 }}>{b.label}</div>
+                        <div style={{ fontSize: 9, color: MUTED, marginTop: 2 }}>{fmtNum(b.traffic)} visits</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Stacked position bar */}
+                  <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", gap: 1 }}>
+                    {posBuckets.filter(b => b.count > 0).map(b => (
+                      <div key={b.label} title={`${b.label}: ${b.count} keywords`}
+                        style={{ flex: b.count, background: b.color, transition: "flex .4s ease" }} />
+                    ))}
+                  </div>
+                </div>
 
-                  {/* Opportunity keyword table */}
-                  {oppKeywords.length > 0 && (
-                    <ChartCard title="Opportunity Keywords" hint="Keywords triggering high-value features (Featured Snippet, PAA, FAQ, Image Pack, Video). Prioritise content around these.">
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {oppKeywords.map((kw, i) => {
-                          const features = normaliseSerpFeatures(kw.serp_features).filter(f => OPPORTUNITY_FEATURES.includes(f));
-                          return (
-                            <div key={i} style={{ paddingBottom: 8, borderBottom: i < oppKeywords.length - 1 ? `1px solid ${BORDER}` : "none" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: TEXT, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw.keyword}</span>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, flexShrink: 0 }}>#{kw.best_position}</span>
-                              </div>
-                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                                {features.map(f => {
-                                  const meta = SERP_META[f] ?? { label: f, icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER };
-                                  return (
-                                    <span key={f} style={{ fontSize: 9, fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: 3, padding: "1px 5px" }}>
-                                      {meta.icon} {meta.label}
-                                    </span>
-                                  );
-                                })}
-                                <span style={{ fontSize: 9, color: MUTED, marginLeft: "auto" }}>
-                                  {fmtNum(kw.volume)}/mo · {fmtNum(kw.sum_traffic)} visits
-                                </span>
-                              </div>
+                {/* ── Intent + SERP Features side by side ── */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+
+                  {/* Intent table */}
+                  {intentRows.length > 0 && (
+                    <ChartCard title="Keywords by Intent" hint="How users intend to use the queries your site ranks for.">
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <thead>
+                          <tr>
+                            {["Intent","Keywords","Traffic","Share"].map(h => (
+                              <th key={h} style={{ textAlign: h === "Intent" ? "left" : "right", padding: "0 0 8px", fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {intentRows.map((r, i) => {
+                            const sharePct = totalTraffic > 0 ? Math.round((r.traffic / totalTraffic) * 100) : 0;
+                            return (
+                              <tr key={r.key} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
+                                <td style={{ padding: "7px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: 2, background: r.color, flexShrink: 0 }} />
+                                  <span style={{ fontWeight: 600, color: TEXT }}>{r.label}</span>
+                                </td>
+                                <td style={{ textAlign: "right", fontWeight: 700, color: r.color, padding: "7px 0" }}>{r.count.toLocaleString()}</td>
+                                <td style={{ textAlign: "right", color: MUTED, padding: "7px 0" }}>{fmtNum(r.traffic)}</td>
+                                <td style={{ textAlign: "right", padding: "7px 0", paddingLeft: 8 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                                    <div style={{ width: 36, height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden" }}>
+                                      <div style={{ width: `${sharePct}%`, height: "100%", background: r.color, borderRadius: 2 }} />
+                                    </div>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: r.color, minWidth: 28 }}>{sharePct}%</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </ChartCard>
+                  )}
+
+                  {/* SERP feature SOV */}
+                  {sovRows.length > 0 && (
+                    <ChartCard title="SERP Feature Share of Voice" hint="% of ranking keywords where each feature appears. 'Owned' = you hold that feature position.">
+                      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                        {sovRows.map(({ feat, meta, count, pct, owned }) => (
+                          <div key={feat}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                              <span style={{ fontSize: 12 }}>{meta.icon}</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: TEXT, flex: 1 }}>{meta.label}</span>
+                              {owned && <span style={{ fontSize: 8, fontWeight: 800, color: GREEN, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 3, padding: "1px 4px" }}>OWNED</span>}
+                              <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, minWidth: 30, textAlign: "right" }}>{pct}%</span>
+                              <span style={{ fontSize: 9, color: MUTED, minWidth: 40, textAlign: "right" }}>{count.toLocaleString()} kw</span>
                             </div>
-                          );
-                        })}
+                            <div style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: meta.color, borderRadius: 3, transition: "width .4s ease" }} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </ChartCard>
                   )}
                 </div>
 
-                {/* Export row */}
+                {/* ── Opportunity keywords ── */}
+                {oppKeywords.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 4 }}>Content Opportunity Keywords</div>
+                    <div style={{ fontSize: 10, color: MUTED, marginBottom: 10 }}>Queries triggering Featured Snippet, PAA, FAQ, Image Pack or Video — high-value targets for new or refreshed content.</div>
+                    <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <thead style={{ background: BG }}>
+                          <tr>
+                            {["Keyword","Pos","Volume","Traffic","Features"].map(h => (
+                              <th key={h} style={{ textAlign: h === "Keyword" ? "left" : "right", padding: "8px 12px", fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {oppKeywords.map((kw, i) => {
+                            const feats = normaliseSerpFeatures(kw.serp_features).filter(f => OPPORTUNITY_FEATURES.includes(f));
+                            const posColor = kw.best_position <= 3 ? GREEN : kw.best_position <= 10 ? BLUE : kw.best_position <= 20 ? AMBER : MUTED;
+                            return (
+                              <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none", background: i % 2 === 0 ? "#fff" : "#FAFBFC" }}>
+                                <td style={{ padding: "8px 12px", fontWeight: 600, color: TEXT, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw.keyword}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800, color: posColor }}>#{kw.best_position}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "right", color: MUTED }}>{fmtNum(kw.volume)}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN }}>{fmtNum(kw.sum_traffic)}</td>
+                                <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                                  <div style={{ display: "flex", gap: 3, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                    {feats.map(f => {
+                                      const meta = SERP_META[f] ?? { icon: "🔎", color: MUTED, bg: "#F7F8FA", border: BORDER };
+                                      return <span key={f} title={meta.label ?? f} style={{ fontSize: 13 }}>{meta.icon}</span>;
+                                    })}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Top keywords ── */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 10 }}>Top Organic Keywords</div>
+                  <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead style={{ background: BG }}>
+                        <tr>
+                          {["Keyword","Pos","Vol","Traffic","KD","Intent"].map(h => (
+                            <th key={h} style={{ textAlign: h === "Keyword" ? "left" : "right", padding: "8px 12px", fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topKeywords.map((kw, i) => {
+                          const posColor = kw.best_position <= 3 ? GREEN : kw.best_position <= 10 ? BLUE : kw.best_position <= 20 ? AMBER : MUTED;
+                          const kd = kw.keyword_difficulty ?? null;
+                          const kdColor = kd == null ? MUTED : kd >= 70 ? RED : kd >= 40 ? AMBER : GREEN;
+                          const intent = kw.is_branded ? "B" : kw.is_transactional ? "T" : kw.is_commercial ? "C" : kw.is_informational ? "I" : kw.is_navigational ? "N" : "—";
+                          const intentColor = { B: BLUE, T: GREEN, C: AMBER, I: TEAL, N: PURPLE, "—": MUTED }[intent];
+                          return (
+                            <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : "none", background: i % 2 === 0 ? "#fff" : "#FAFBFC" }}>
+                              <td style={{ padding: "8px 12px", fontWeight: 600, color: TEXT, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw.keyword}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 800, color: posColor }}>#{kw.best_position}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", color: MUTED }}>{fmtNum(kw.volume)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN }}>{fmtNum(kw.sum_traffic)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, color: kdColor }}>{kd ?? "—"}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: intentColor, background: "#F7F8FA", border: `1px solid ${BORDER}`, borderRadius: 3, padding: "1px 5px" }}>{intent}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ fontSize: 9, color: MUTED, marginTop: 4 }}>Intent: B=Branded · I=Informational · C=Commercial · T=Transactional · N=Navigational</div>
+                </div>
+
+                {/* ── Top pages ── */}
+                {topPages.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 10 }}>Top Organic Pages by Traffic</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {topPages.map((p, i) => {
+                        const pct = totalTraffic > 0 ? (p.traffic / totalTraffic) * 100 : 0;
+                        const slug = p.url.replace(/^https?:\/\/[^/]+/, "") || "/";
+                        return (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 20, fontSize: 10, fontWeight: 700, color: MUTED, textAlign: "right", flexShrink: 0 }}>{i + 1}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 3 }} title={p.url}>{slug}</div>
+                              <div style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ width: `${pct}%`, height: "100%", background: BLUE, borderRadius: 3 }} />
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: GREEN }}>{fmtNum(p.traffic)}</div>
+                              <div style={{ fontSize: 9, color: MUTED }}>{p.keywords} kw</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Export ── */}
                 {!isPortal && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "12px 14px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>Reporting Export</div>
-                      <div style={{ fontSize: 11, color: MUTED }}>Download all {totalKw.toLocaleString()} keywords with SERP features as CSV for Google Sheets or executive reporting.</div>
+                      <div style={{ fontSize: 11, color: MUTED }}>Download all {totalKw.toLocaleString()} keywords with positions, intent, difficulty and SERP features as CSV for Google Sheets or executive reporting.</div>
                     </div>
-                    <button
-                      onClick={() => exportSerpCSV(keywords, domain)}
+                    <button onClick={() => exportSerpCSV(keywords, domain)}
                       style={{ padding: "8px 16px", borderRadius: 7, border: `1.5px solid ${ACCENT}`, background: "#fff", color: ACCENT, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
                       ↓ Export CSV
                     </button>
