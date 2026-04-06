@@ -1204,10 +1204,19 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
           })()}
 
           {/* ── Top Organic Competitors ── */}
+          {errors.competitors && <ErrBox msg={`Competitors: ${errors.competitors}`} />}
           {(() => {
             const raw = data?.competitors;
-            const comps = raw?.competitors ?? raw?.domains ?? raw ?? [];
-            if (!Array.isArray(comps) || !comps.length) return null;
+            // Debug: surface raw shape if no recognized array found
+            const comps = raw?.competitors ?? raw?.domains ?? (Array.isArray(raw) ? raw : []);
+            if (!Array.isArray(comps) || !comps.length) {
+              if (raw) return (
+                <div style={{ fontSize: 10, color: MUTED, padding: "8px 12px", background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 6, marginTop: 8, wordBreak: "break-all" }}>
+                  Competitors raw shape: {JSON.stringify(raw).slice(0, 300)}
+                </div>
+              );
+              return null;
+            }
             const totalKw = data?.serp?.keywords?.length
               ? data.serp.keywords.reduce((s, k) => s + 1, 0)
               : null;
