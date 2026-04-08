@@ -4,7 +4,9 @@
   "outputDirectory": "dist",
   "functions": {
     "api/screenshot.js": { "memory": 1024, "maxDuration": 45 },
-    "api/ahrefs.js":     { "maxDuration": 15 }
+    "api/ahrefs.js":     { "maxDuration": 15 },
+    "api/db.js":         { "maxDuration": 15 },
+    "api/upload.js":     { "memory": 1024, "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
