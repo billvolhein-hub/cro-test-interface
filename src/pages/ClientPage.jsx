@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
+import IdeationModal from "../components/IdeationModal";
 import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import CrawlReport from "../components/CrawlReport";
 import AhrefsReport from "../components/AhrefsReport";
+import CrossSignalReport from "../components/CrossSignalReport";
 import ReportBuilderModal from "../components/ReportBuilderModal";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { regeneratePortalToken } from "../lib/api";
@@ -32,7 +34,7 @@ function mergeBrand(saved) {
   return { ...DEFAULT_BRAND, ...(saved || {}) };
 }
 
-export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTest, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken, onUpdatePortalPassword }) {
+export default function ClientPage({ agencySlug = "", clients, tests, onCreateTest, onUpdateTest, onSaveScreenshots, onSaveCrawlReport, onUpdateClientBrand, onRegeneratePortalToken, onUpdatePortalPassword }) {
   const { id, portalToken } = useParams();
   const navigate = useNavigate();
   const ap = (path) => `/${agencySlug}${path}`;
@@ -47,6 +49,13 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
 
   const brand = mergeBrand(client?.brand);
 
+  const [rawSfRows,          setRawSfRows]          = useState([]);
+  const [rawIssueRows,       setRawIssueRows]       = useState([]);
+  const [gscPages,           setGscPages]           = useState([]);
+  const [gscQueries,         setGscQueries]         = useState([]);
+  const [ga4Rows,            setGa4Rows]            = useState([]);
+  const [gscDone,            setGscDone]            = useState(false);
+  const [ga4Done,            setGa4Done]            = useState(false);
   const [pendingDomain,      setPendingDomain]      = useState("");
   const [engagementOpen,     setEngagementOpen]     = useState(false);
   const [modalOpen,          setModalOpen]          = useState(false);
@@ -63,6 +72,7 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
       ahrefsRef.current?.triggerFetch(pendingDomain);
     }
   }, [crawlDone, issuesDone, pendingDomain, ahrefsDone]);
+  const [ideationOpen,   setIdeationOpen]   = useState(false);
   const [editing,        setEditing]        = useState(false);
   const [draft,          setDraft]          = useState(brand);
   const [saving,         setSaving]         = useState(false);
@@ -587,7 +597,16 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
 
             {/* ── Pipeline overview ── */}
             <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "18px 22px", marginBottom: 28, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Test Pipeline</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", flex: 1 }}>Test Pipeline</div>
+                {!isPortal && (
+                  <button
+                    onClick={() => setIdeationOpen(true)}
+                    style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: ACCENT, border: "none", color: "#fff", whiteSpace: "nowrap" }}>
+                    + New Test
+                  </button>
+                )}
+              </div>
               <div style={{ display: "flex", alignItems: "center" }}>
                 {pipelineGroups.map((p, i) => (
                   <div key={p.label} style={{ display: "flex", alignItems: "center", flex: 1 }}>
@@ -608,7 +627,13 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
               <div style={{ textAlign: "center", padding: "80px 0", color: MUTED }}>
                 <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
                 <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No tests yet for {client.name}</div>
-                <div style={{ fontSize: 14 }}>Head back to the home page to create one.</div>
+                {!isPortal && (
+                  <button
+                    onClick={() => setIdeationOpen(true)}
+                    style={{ background: ACCENT, color: "#fff", border: "none", padding: "10px 22px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", marginTop: 8 }}>
+                    + Create First Test
+                  </button>
+                )}
               </div>
             ) : (
               [...pipelineGroups]
@@ -641,15 +666,17 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
             {!isPortal && (
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
                 <button
-                  onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setPendingDomain(""); setModalOpen(true); }}
+                  onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setGscDone(false); setGa4Done(false); setPendingDomain(""); setModalOpen(true); }}
                   style={{ background: ACCENT, color: "#fff", border: "none", borderRadius: 8, padding: "11px 24px", fontFamily: "'Inter',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
                   ⚡ Build Site Report
                 </button>
-                {(crawlDone || issuesDone || ahrefsDone) && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {crawlDone  && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,     background: "#CCFBF1", border: "1px solid #99F6E4", borderRadius: 5, padding: "4px 10px" }}>SEO Internal ✓</span>}
-                    {issuesDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #C4B5FD", borderRadius: 5, padding: "4px 10px" }}>SEO Issues ✓</span>}
+                {(crawlDone || issuesDone || ahrefsDone || gscDone || ga4Done) && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {crawlDone  && <span style={{ fontSize: 11, fontWeight: 600, color: TEAL,     background: "#CCFBF1", border: "1px solid #99F6E4", borderRadius: 5, padding: "4px 10px" }}>SF Internal ✓</span>}
+                    {issuesDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#7C3AED", background: "#EDE9FE", border: "1px solid #C4B5FD", borderRadius: 5, padding: "4px 10px" }}>SF Issues ✓</span>}
                     {ahrefsDone && <span style={{ fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#DBEAFE", border: "1px solid #BFDBFE", borderRadius: 5, padding: "4px 10px" }}>Backlinks ✓</span>}
+                    {gscDone    && <span style={{ fontSize: 11, fontWeight: 600, color: "#D97706", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 5, padding: "4px 10px" }}>GSC ✓</span>}
+                    {ga4Done    && <span style={{ fontSize: 11, fontWeight: 600, color: "#DB2777", background: "#FDF2F8", border: "1px solid #F9A8D4", borderRadius: 5, padding: "4px 10px" }}>GA4 ✓</span>}
                   </div>
                 )}
               </div>
@@ -666,6 +693,10 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
                 crawlDone={crawlDone}
                 issuesDone={issuesDone}
                 ahrefsDone={ahrefsDone}
+                gscDone={gscDone}
+                ga4Done={ga4Done}
+                onGscData={(pages, queries) => { setGscPages(pages); setGscQueries(queries); setGscDone(true); }}
+                onGa4Data={(rows) => { setGa4Rows(rows); setGa4Done(true); }}
               />
             )}
 
@@ -687,11 +718,44 @@ export default function ClientPage({ agencySlug = "", clients, tests, onUpdateTe
               onSave={(report) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ...report })}
               onDomainExtracted={(domain) => { setPendingDomain(domain); }}
               onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
+              onRawSfRows={setRawSfRows}
+              onRawIssueRows={setRawIssueRows}
               isPortal={isPortal}
+              brand={client.brand}
             />
+
+            {!isPortal && (
+              <CrossSignalReport
+                sfRows={rawSfRows}
+                sfIssueRows={rawIssueRows}
+                gscPages={gscPages}
+                gscQueries={gscQueries}
+                ga4Rows={ga4Rows}
+                savedData={client.crawlReport?.crossSignal ?? null}
+                onSave={(data) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), crossSignal: data })}
+                ahrefsData={client.crawlReport?.ahrefs ?? null}
+              />
+            )}
           </>
         )}
       </div>
+
+      <IdeationModal
+        open={ideationOpen}
+        onClose={() => setIdeationOpen(false)}
+        clients={clients}
+        activeClientId={clientId}
+        onSelectBlank={async (cid) => {
+          setIdeationOpen(false);
+          const saved = await onCreateTest({ clientId: cid ?? clientId, testName: "Untitled Test", status: "Backlog" });
+          navigate(ap(`/tests/${saved.id}`));
+        }}
+        onSelectRecommendation={async (testData, screenshots) => {
+          const saved = await onCreateTest({ ...testData, clientId: testData.clientId ?? clientId });
+          if (Object.keys(screenshots).length > 0) await onSaveScreenshots?.(saved.id, screenshots);
+          navigate(ap(`/tests/${saved.id}`));
+        }}
+      />
     </div>
   );
 }

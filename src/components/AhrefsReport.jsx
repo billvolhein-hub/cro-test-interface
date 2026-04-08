@@ -596,7 +596,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("blhistory",  () => getBacklinksHistory(target)),
       safe("refs",       () => getRefdomains(target)),
       safe("anchors",    () => getAnchors(target)),
-      safe("backlinks",  () => getTopBacklinks(target)),
+      // safe("backlinks",  () => getTopBacklinks(target)),  // requires higher Ahrefs plan tier
       safe("serp",        () => getOrganicKeywords(target)),
       safe("serptrend",   () => getSerpFeaturesHistory(target)),
       safe("competitors", () => getOrganicCompetitors(target)),
@@ -1090,7 +1090,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                   return (
                     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "16px 18px", marginBottom: 20 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, marginBottom: 2 }}>SERP Feature Visibility — 12-Month Trend</div>
-                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 14 }}>Keywords triggering each SERP feature over time. Click to toggle features on/off.</div>
+                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 14 }}>Approximated from top 1,000 organic keywords by traffic per month — not Ahrefs' pre-aggregated domain-level data. Features like Sitelinks may appear in Share of Voice but not here. Click to toggle.</div>
 
                       {/* Toggle pills */}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>

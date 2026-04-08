@@ -1,61 +1,66 @@
-import { supabase } from "./lib/supabase";
-
 const BUCKET = "screenshots";
 
-// Returns { controlDesktop, controlMobile, variantDesktop, variantMobile, ... } (public URLs)
-export async function loadScreenshots(testId) {
-  const { data, error } = await supabase
-    .from("tests")
-    .select("screenshots")
-    .eq("id", testId)
-    .single();
-  if (error || !data) return {};
-  return data.screenshots ?? {};
+async function db(payload) {
+  const res = await fetch("/api/db", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "Database error");
+  return data;
 }
 
-// Accepts screenshots object where values may be data URLs or existing public URLs.
-// Uploads any data URLs to Supabase Storage and saves URL map back to tests.screenshots.
+async function upload(payload) {
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "Upload error");
+  return data;
+}
+
+export async function loadScreenshots(testId) {
+  const data = await db({
+    table: "tests",
+    action: "select",
+    select: "screenshots",
+    filters: { id: testId },
+    single: true,
+  });
+  return data?.screenshots ?? {};
+}
+
 export async function saveScreenshots(testId, screenshots) {
   const urls = {};
 
   for (const [zone, value] of Object.entries(screenshots)) {
     if (!value) continue;
-
     if (value.startsWith("data:")) {
-      // Convert data URL → blob and upload
-      const res = await fetch(value);
-      const blob = await res.blob();
-      const ext = blob.type.includes("png") ? "png" : "jpg";
-      const path = `${testId}/${zone}.${ext}`;
-
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, blob, { upsert: true, contentType: blob.type });
-
-      if (!upErr) {
-        const { data: { publicUrl } } = supabase.storage
-          .from(BUCKET)
-          .getPublicUrl(path);
-        urls[zone] = publicUrl;
-      }
+      const ext = value.startsWith("data:image/png") ? "png" : "jpg";
+      const { publicUrl } = await upload({
+        action: "upload",
+        bucket: BUCKET,
+        path: `${testId}/${zone}.${ext}`,
+        dataUrl: value,
+        contentType: ext === "png" ? "image/png" : "image/jpeg",
+      });
+      urls[zone] = publicUrl;
     } else {
-      // Already a public URL — keep as-is
-      urls[zone] = value;
+      urls[zone] = value; // already a public URL — keep as-is
     }
   }
 
-  await supabase
-    .from("tests")
-    .update({ screenshots: urls })
-    .eq("id", testId);
+  await db({ table: "tests", action: "update", data: { screenshots: urls }, filters: { id: testId } });
 }
 
-// Removes all screenshots for a deleted test
 export async function removeScreenshots(testId) {
-  const { data: files } = await supabase.storage.from(BUCKET).list(testId);
+  const files = await upload({ action: "list", bucket: BUCKET, prefix: testId });
   if (files?.length) {
-    const paths = files.map((f) => `${testId}/${f.name}`);
-    await supabase.storage.from(BUCKET).remove(paths);
+    const paths = files.map(f => `${testId}/${f.name}`);
+    await upload({ action: "remove", bucket: BUCKET, paths });
   }
-  await supabase.from("tests").update({ screenshots: {} }).eq("id", testId);
+  await db({ table: "tests", action: "update", data: { screenshots: {} }, filters: { id: testId } });
 }

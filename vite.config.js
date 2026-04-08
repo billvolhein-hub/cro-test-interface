@@ -49,6 +49,129 @@ function screenshotPlugin() {
   };
 }
 
+// Shared: read + parse JSON request body from a Node IncomingMessage
+async function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      try { resolve(JSON.parse(raw)); }
+      catch { resolve({}); }
+    });
+    req.on("error", () => resolve({}));
+  });
+}
+
+function dbPlugin(env) {
+  return {
+    name: "db-api",
+    configureServer(server) {
+      server.middlewares.use("/api/db", async (req, res) => {
+        res.setHeader("Content-Type", "application/json");
+        if (req.method !== "POST") { res.statusCode = 405; res.end(JSON.stringify({ error: "Method not allowed" })); return; }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+        const ALLOWED_TABLES = ["clients", "tests", "agencies", "platform_config"];
+        const { table, action, ...payload } = await readJsonBody(req);
+
+        if (!table || !action || !ALLOWED_TABLES.includes(table)) {
+          res.statusCode = 400; res.end(JSON.stringify({ error: "Invalid table or action" })); return;
+        }
+
+        try {
+          const ref = supabase.from(table);
+          let result = null;
+
+          if (action === "select") {
+            let q = ref.select(payload.select ?? "*");
+            for (const [col, val] of Object.entries(payload.filters ?? {})) q = q.eq(col, val);
+            if (payload.order) q = q.order(payload.order.col, { ascending: payload.order.asc ?? true });
+            if (payload.single) q = q.single();
+            const { data, error } = await q;
+            if (error) throw error;
+            result = data;
+          } else if (action === "insert") {
+            let q = ref.insert(payload.data).select();
+            if (payload.single) q = q.single();
+            const { data, error } = await q;
+            if (error) throw error;
+            result = data;
+          } else if (action === "update") {
+            let q = ref.update(payload.data);
+            for (const [col, val] of Object.entries(payload.filters ?? {})) q = q.eq(col, val);
+            if (payload.select) { q = q.select(payload.select); if (payload.single) q = q.single(); }
+            const { data, error } = await q;
+            if (error) throw error;
+            result = data ?? null;
+          } else if (action === "delete") {
+            let q = ref.delete();
+            for (const [col, val] of Object.entries(payload.filters ?? {})) q = q.eq(col, val);
+            const { error } = await q;
+            if (error) throw error;
+          } else if (action === "upsert") {
+            const opts = payload.onConflict ? { onConflict: payload.onConflict } : {};
+            const { data, error } = await ref.upsert(payload.data, opts);
+            if (error) throw error;
+            result = data;
+          } else {
+            res.statusCode = 400; res.end(JSON.stringify({ error: `Unknown action: ${action}` })); return;
+          }
+
+          res.end(JSON.stringify(result ?? null));
+        } catch (err) {
+          res.statusCode = 500; res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    },
+  };
+}
+
+function uploadPlugin(env) {
+  return {
+    name: "upload-api",
+    configureServer(server) {
+      server.middlewares.use("/api/upload", async (req, res) => {
+        res.setHeader("Content-Type", "application/json");
+        if (req.method !== "POST") { res.statusCode = 405; res.end(JSON.stringify({ error: "Method not allowed" })); return; }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+
+        const ALLOWED_BUCKETS = ["screenshots", "agency-logos"];
+        const { action, bucket, ...payload } = await readJsonBody(req);
+
+        if (!bucket || !ALLOWED_BUCKETS.includes(bucket)) {
+          res.statusCode = 400; res.end(JSON.stringify({ error: "Bucket not allowed" })); return;
+        }
+
+        try {
+          if (action === "upload") {
+            const { path, dataUrl, contentType } = payload;
+            const buf = Buffer.from(dataUrl.replace(/^data:[^;]+;base64,/, ""), "base64");
+            const { error } = await supabase.storage.from(bucket).upload(path, buf, { upsert: true, contentType: contentType ?? "application/octet-stream" });
+            if (error) throw error;
+            const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+            res.end(JSON.stringify({ publicUrl: data.publicUrl }));
+          } else if (action === "list") {
+            const { data, error } = await supabase.storage.from(bucket).list(payload.prefix ?? "");
+            if (error) throw error;
+            res.end(JSON.stringify(data ?? []));
+          } else if (action === "remove") {
+            if (payload.paths?.length) await supabase.storage.from(bucket).remove(payload.paths);
+            res.end(JSON.stringify({ ok: true }));
+          } else {
+            res.statusCode = 400; res.end(JSON.stringify({ error: `Unknown action: ${action}` }));
+          }
+        } catch (err) {
+          res.statusCode = 500; res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    },
+  };
+}
+
 function ahrefsPlugin(env) {
   return {
     name: "ahrefs-api",
@@ -83,7 +206,7 @@ function ahrefsPlugin(env) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
-    plugins: [react(), screenshotPlugin(), ahrefsPlugin(env)],
+    plugins: [react(), screenshotPlugin(), ahrefsPlugin(env), dbPlugin(env), uploadPlugin(env)],
     server: {
       proxy: {
         "/api/anthropic": {

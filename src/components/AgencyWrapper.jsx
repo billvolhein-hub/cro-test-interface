@@ -224,7 +224,8 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
         <Route path="/clients/:id"
           element={
             <ClientPage agencySlug={slug}
-              clients={clients} tests={tests} onUpdateTest={onUpdateTest}
+              clients={clients} tests={tests} onCreateTest={onCreateTest} onUpdateTest={onUpdateTest}
+              onSaveScreenshots={onSaveScreenshots}
               onSaveCrawlReport={onSaveCrawlReport} onUpdateClientBrand={onUpdateClientBrand}
               onRegeneratePortalToken={onRegeneratePortalToken} onUpdatePortalPassword={onUpdatePortalPassword}
             />

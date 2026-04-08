@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import ClientsModal from "../components/ClientsModal";
+import IdeationModal from "../components/IdeationModal";
 import { pieScore, fmtDate } from "../lib/utils";
 import ClientNotesFeed from "../components/ClientNotesFeed";
 import { ACCENT, BG, CARD, BORDER, TEXT, MUTED } from "../lib/constants";
@@ -32,6 +33,7 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
   const [seoExpanded,       setSeoExpanded]       = useState(false);
   const [testingOpen,       setTestingOpen]       = useState(true);
   const [seoOpen,           setSeoOpen]           = useState(true);
+  const [ideationOpen,      setIdeationOpen]      = useState(false);
 
   // ── Testing derived data ──────────────────────────────────────────────────
   const backlog   = tests.filter(t => (t.status || "Backlog") === "Backlog").length;
@@ -88,7 +90,7 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
 
       <AppHeader />
 
-      <div style={{ padding: isMobile ? "0 16px 48px" : "0 28px 56px", overflowX: "hidden" }}>
+      <div style={{ padding: isMobile ? "24px 16px 48px" : "32px 28px 56px", overflowX: "hidden" }}>
 
         {/* ── Client Management ─────────────────────────────────────────────── */}
         <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
@@ -147,6 +149,11 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
             <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🧪 Testing</div>
             <div style={{ flex: 1, height: 1, background: BORDER }} />
             <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{tests.length} total</div>
+            <button
+              onClick={e => { e.stopPropagation(); setIdeationOpen(true); }}
+              style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: ACCENT, border: "none", color: "#fff", whiteSpace: "nowrap" }}>
+              + New Test
+            </button>
             <div style={{ fontSize: 12, color: MUTED, transform: testingOpen ? "rotate(180deg)" : "none", transition: "transform .2s", lineHeight: 1 }}>▾</div>
           </div>
           {testingOpen && <>
@@ -414,6 +421,23 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
           onClose={() => setClientsModalOpen(false)}
         />
       )}
+
+      <IdeationModal
+        open={ideationOpen}
+        onClose={() => setIdeationOpen(false)}
+        clients={clients}
+        activeClientId="all"
+        onSelectBlank={async (clientId) => {
+          setIdeationOpen(false);
+          const saved = await onCreateTest({ clientId, testName: "Untitled Test", status: "Backlog" });
+          navigate(ap(`/tests/${saved.id}`));
+        }}
+        onSelectRecommendation={async (testData, screenshots) => {
+          const saved = await onCreateTest(testData);
+          if (Object.keys(screenshots).length > 0) await onSaveScreenshots(saved.id, screenshots);
+          navigate(ap(`/tests/${saved.id}`));
+        }}
+      />
     </div>
   );
 }

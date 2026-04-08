@@ -14,18 +14,59 @@ function ringPos(i, total, radius) {
   };
 }
 
-function nodeColor(n) {
+// ── Brand palette helpers ────────────────────────────────────────────────────
+const DEFAULT_PALETTE = ["#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"];
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+}
+function rgbToHex(r,g,b) {
+  return "#" + [r,g,b].map(v => Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,"0")).join("");
+}
+function blendWith(hex, toWhite, t) {
+  const [r1,g1,b1] = hexToRgb(hex);
+  const [r2,g2,b2] = toWhite ? [255,255,255] : [0,0,0];
+  return rgbToHex(r1+(r2-r1)*t, g1+(g2-g1)*t, b1+(b2-b1)*t);
+}
+function brandPalette(hex) {
+  if (!hex || hex.length < 4) return DEFAULT_PALETTE;
+  try {
+    hexToRgb(hex); // validate
+    return [
+      blendWith(hex, false, 0.15),
+      hex,
+      blendWith(hex, true, 0.3),
+      blendWith(hex, true, 0.55),
+      blendWith(hex, true, 0.75),
+    ];
+  } catch { return DEFAULT_PALETTE; }
+}
+
+function nodeColor(n, palette = DEFAULT_PALETTE) {
   if (n._external) return "#3B82F6";
   const status = String(n.status ?? "");
   if (!status || status === "0") return "#6B7280";
   if (status.startsWith("3")) return "#F59E0B";
   if (status.startsWith("4")) return "#DC2626";
   if (status.startsWith("5")) return "#7C3AED";
-  if (status === "200" && n.index) {
-    const greens = ["#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"];
-    return greens[Math.min(n.depth ?? 0, greens.length - 1)];
+  if (status.startsWith("2") && n.index) {
+    return palette[Math.min(n.depth ?? 0, palette.length - 1)];
   }
-  return "#DC2626";
+  if (status.startsWith("2")) return "#F97316"; // 2xx but non-indexable (noindex, canonical, etc.)
+  return "#6B7280"; // anything else — unknown/unexpected
+}
+
+function nodeType(n) {
+  if (n._external) return "External domain";
+  const status = String(n.status ?? "");
+  if (!status || status === "0") return "Not crawled";
+  if (status.startsWith("3")) return `Redirect`;
+  if (status.startsWith("4")) return `Error`;
+  if (status.startsWith("5")) return `Server error`;
+  if (status.startsWith("2") && n.index) return "Indexable";
+  if (status.startsWith("2")) return "Non-indexable";
+  return "Unknown";
 }
 
 function buildGraph(rawNodes, ahrefsData) {
@@ -106,13 +147,14 @@ function buildGraph(rawNodes, ahrefsData) {
 }
 
 // ── Legend ─────────────────────────────────────────────────────────────────────
-function Legend() {
+function Legend({ palette = DEFAULT_PALETTE }) {
   const items = [
-    { color: "#16A34A", label: "Indexable (depth 0–1)" },
-    { color: "#4ADE80", label: "Indexable (depth 2–3)" },
-    { color: "#86EFAC", label: "Indexable (depth 4+)" },
+    { color: palette[0], label: "Indexable (depth 0–1)" },
+    { color: palette[2], label: "Indexable (depth 2–3)" },
+    { color: palette[4], label: "Indexable (depth 4+)" },
+    { color: "#F97316", label: "Non-indexable (noindex / canonical)" },
     { color: "#F59E0B", label: "Redirect (3xx)" },
-    { color: "#DC2626", label: "Non-indexable / 4xx" },
+    { color: "#DC2626", label: "Error (4xx)" },
     { color: "#7C3AED", label: "Server Error (5xx)" },
     { color: "#6B7280", label: "Unknown / not crawled" },
     { color: "#3B82F6", label: "External backlink domain" },
@@ -132,8 +174,10 @@ function Legend() {
 // ── Stats bar ──────────────────────────────────────────────────────────────────
 function StatsBar({ nodes, ahrefsData }) {
   if (!nodes?.length) return null;
-  const indexable    = nodes.filter(n => String(n.status) === "200" && n.index).length;
-  const nonIndexable = nodes.length - indexable;
+  const status200    = (n) => String(n.status ?? "").startsWith("2");
+  const indexable    = nodes.filter(n => status200(n) && n.index).length;
+  const noindex200   = nodes.filter(n => status200(n) && !n.index).length;
+  const errors       = nodes.filter(n => { const s = String(n.status ?? ""); return s.startsWith("4") || s.startsWith("5"); }).length;
   const avgDepth     = (nodes.reduce((s, n) => s + (n.depth ?? 0), 0) / nodes.length).toFixed(1);
   const orphans      = nodes.filter(n => n.inlinks === 0 && (n.depth ?? 0) > 0).length;
   const blItems      = ahrefsData?.data?.backlinks?.backlinks ?? [];
@@ -143,10 +187,11 @@ function StatsBar({ nodes, ahrefsData }) {
     : refDomains.length;
   const stats = [
     { label: "Total URLs",    value: nodes.length.toLocaleString() },
-    { label: "Indexable",     value: indexable.toLocaleString(),    color: "#4ADE80" },
-    { label: "Non-indexable", value: nonIndexable.toLocaleString(), color: "#FCA5A5" },
+    { label: "Indexable",     value: indexable.toLocaleString(),  color: "#4ADE80" },
+    { label: "Non-indexable", value: noindex200.toLocaleString(), color: "#F97316" },
+    { label: "Errors",        value: errors.toLocaleString(),     color: "#DC2626" },
     { label: "Avg Depth",     value: avgDepth },
-    { label: "Orphaned",      value: orphans.toLocaleString(),      color: "#FCD34D" },
+    { label: "Orphaned",      value: orphans.toLocaleString(),    color: "#FCD34D" },
     ...(extCount > 0 ? [{ label: "Ext. Domains", value: extCount.toLocaleString(), color: "#93C5FD" }] : []),
   ];
   return (
@@ -172,15 +217,14 @@ function isLightColor(hex) {
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
-function Tooltip({ node, pos }) {
+function Tooltip({ node, pos, palette }) {
   if (!node) return null;
-  const color = nodeColor(node);
+  const color = nodeColor(node, palette);
   const light = isLightColor(color);
   const textPrimary   = light ? "#111827" : "#ffffff";
   const textSecondary = light ? "rgba(0,0,0,.7)" : "rgba(255,255,255,.85)";
   const textMeta      = light ? "rgba(0,0,0,.85)" : "rgba(255,255,255,.95)";
   const border        = light ? "rgba(0,0,0,.15)" : "rgba(255,255,255,.2)";
-  const isIndexable   = String(node.status) === "200" && node.index;
   return (
     <div style={{ position: "fixed", left: pos.x + 14, top: pos.y - 10, background: color, borderRadius: 8, padding: "10px 14px", maxWidth: 340, pointerEvents: "none", zIndex: 9999, boxShadow: "0 4px 24px rgba(0,0,0,.5)", border: `1px solid ${border}` }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: textPrimary, wordBreak: "break-all", marginBottom: node.title ? 4 : 6, fontFamily: "'Inter',sans-serif", lineHeight: 1.4 }}>
@@ -198,7 +242,7 @@ function Tooltip({ node, pos }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px" }}>
-          {[["Status", node.status || "—"], ["Depth", node.depth ?? 0], ["Inlinks", node.inlinks ?? 0], ["Indexable", isIndexable ? "Yes" : "No"]].map(([k, v]) => (
+          {[["Type", nodeType(node)], ["Status", node.status || "—"], ["Depth", node.depth ?? 0], ["Inlinks", node.inlinks ?? 0]].map(([k, v]) => (
             <span key={k} style={{ fontSize: 10, color: textMeta, fontFamily: "'Inter',sans-serif" }}><b>{k}:</b> {v}</span>
           ))}
         </div>
@@ -208,7 +252,7 @@ function Tooltip({ node, pos }) {
 }
 
 // ── Main modal ─────────────────────────────────────────────────────────────────
-export default function DirectoryTreeModal({ nodes: rawNodes, ahrefsData, onClose }) {
+export default function DirectoryTreeModal({ nodes: rawNodes, ahrefsData, onClose, brand }) {
   const mountRef    = useRef(null);
   const graphRef    = useRef(null);
   const mousePosRef = useRef({ x: 0, y: 0 });
@@ -220,6 +264,8 @@ export default function DirectoryTreeModal({ nodes: rawNodes, ahrefsData, onClos
   const [pos,            setPos]            = useState({ x: 0, y: 0 });
   const [showBacklinks,  setShowBacklinks]  = useState(true);
   const showBacklinksRef = useRef(true);
+
+  const palette = brandPalette(brand?.accentColor);
 
   const hasBacklinks = !!(ahrefsData?.data?.refs?.refdomains?.length || ahrefsData?.data?.backlinks?.backlinks?.length);
 
@@ -283,7 +329,7 @@ export default function DirectoryTreeModal({ nodes: rawNodes, ahrefsData, onClos
         .backgroundColor("#1a1a2e")
         .graphData(graphData)
         .nodeLabel(() => "")
-        .nodeColor(n => nodeColor(n))
+        .nodeColor(n => nodeColor(n, palette))
         .nodeOpacity(0.92)
         .nodeVal(n => {
           if (n._external) return Math.max(2, (n._dr ?? 0) * 0.05 + 2);
@@ -416,8 +462,8 @@ export default function DirectoryTreeModal({ nodes: rawNodes, ahrefsData, onClos
         </div>
       )}
 
-      <Legend />
-      <Tooltip node={hoveredNode} pos={tooltipPos} />
+      <Legend palette={palette} />
+      <Tooltip node={hoveredNode} pos={tooltipPos} palette={palette} />
 
       <div style={{ position: "absolute", bottom: 24, right: 24, fontSize: 10, color: "#4B5563", textAlign: "right", lineHeight: 1.8 }}>
         Left-click + drag · Scroll to zoom · Right-click to pan

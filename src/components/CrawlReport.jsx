@@ -35,7 +35,7 @@ function parseCrawlCSV(text) {
   const col = (row, name) => (row[headers.indexOf(name)] ?? "").trim();
   const allRows = lines.slice(1).filter(l => l.trim()).map(l => parseLine(l));
   const htmlRows = allRows.filter(r => col(r, "Content Type").startsWith("text/html") && col(r, "Status Code") === "200");
-  return { col, allRows, htmlRows };
+  return { col, allRows, htmlRows, headers };
 }
 
 function parseNodes(allRows, col) {
@@ -679,7 +679,7 @@ function ReplaceBtn({ label, onFile }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDomainExtracted, onBuildStart, onBuildComplete, isPortal }, ref) {
+const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDomainExtracted, onBuildStart, onBuildComplete, onRawSfRows, onRawIssueRows, isPortal, brand }, ref) {
   const [crawl,     setCrawl]     = useState(crawlReport?.internal ?? null);
   const [issues,    setIssues]    = useState(crawlReport?.issues   ?? null);
   const [domain,    setDomain]    = useState(crawlReport?.domain   ?? "");
@@ -712,7 +712,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
       const text = e.target.result;
       setTimeout(() => {
         try {
-          const { col, allRows, htmlRows } = parseCrawlCSV(text);
+          const { col, allRows, htmlRows, headers } = parseCrawlCSV(text);
           const s = computeStats(allRows, htmlRows, col);
           const nodes = parseNodes(allRows, col);
           const dom = htmlRows[0] ? (() => { try { return new URL(htmlRows[0][0]).hostname; } catch { return ""; } })() : "";
@@ -720,6 +720,14 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
           setCrawl(s); setDomain(dom); setCrawledAt(now); setTreeNodes(nodes);
           persist({ internal: s, nodes, domain: dom, date: now });
           if (dom) onDomainExtracted?.(dom);
+          if (onRawSfRows) {
+            const sfRowObjects = htmlRows.map(row => {
+              const obj = {};
+              headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? String(row[i]).trim() : ""; });
+              return obj;
+            });
+            onRawSfRows(sfRowObjects);
+          }
           onBuildComplete?.("crawl");
         } catch (err) { setErrorC("Could not parse crawl CSV: " + err.message); onBuildComplete?.("crawl"); }
         finally { setLoadingC(false); }
@@ -740,6 +748,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
           const s = computeIssueStats(raw);
           setIssues(s);
           persist({ issues: s });
+          onRawIssueRows?.(raw);
           onBuildComplete?.("issues");
         } catch (err) { setErrorI("Could not parse issues CSV: " + err.message); onBuildComplete?.("issues"); }
         finally { setLoadingI(false); }
@@ -852,7 +861,7 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
       )}
 
       {treeOpen && treeNodes?.length > 0 && (
-        <DirectoryTreeModal nodes={treeNodes} ahrefsData={crawlReport?.ahrefs} onClose={() => setTreeOpen(false)} />
+        <DirectoryTreeModal nodes={treeNodes} ahrefsData={crawlReport?.ahrefs} onClose={() => setTreeOpen(false)} brand={brand} />
       )}
     </div>
   );
