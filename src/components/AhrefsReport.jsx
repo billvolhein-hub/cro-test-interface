@@ -566,6 +566,9 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
   const [errors,         setErrors]         = useState(savedData?.errors || {});
   const [open,           setOpen]           = useState(false);
   const [activeFeatures, setActiveFeatures] = useState(new Set(["featured_snippet", "ai_overview", "sitelinks"]));
+  const [showAllBL,      setShowAllBL]      = useState(false);
+  const [showAllBP,      setShowAllBP]      = useState(false);
+  const [showAllBroken,  setShowAllBroken]  = useState(false);
   const onSaveRef = useRef(onSave);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
 
@@ -891,7 +894,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       </tr>
                     </thead>
                     <tbody>
-                      {backlinks.slice(0, 50).map((b, i) => (
+                      {(showAllBL ? backlinks : backlinks.slice(0, 20)).map((b, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 ? BG : "transparent" }}>
                           <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.name_source ?? b.url_from}</td>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating_source ?? 0) }}>{b.domain_rating_source ?? "—"}</td>
@@ -906,9 +909,11 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       ))}
                     </tbody>
                   </table>
-                  {backlinks.length > 50 && (
-                    <div style={{ padding: "8px 12px", fontSize: 10, color: MUTED, background: BG, borderTop: `1px solid ${BORDER}` }}>
-                      Showing top 50 of {backlinks.length.toLocaleString()} backlinks (ordered by DR)
+                  {backlinks.length > 20 && (
+                    <div style={{ padding: "8px 12px", background: BG, borderTop: `1px solid ${BORDER}`, textAlign: "center" }}>
+                      <button onClick={() => setShowAllBL(v => !v)} style={{ fontSize: 11, color: BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                        {showAllBL ? "Show less" : `Show all ${backlinks.length.toLocaleString()} backlinks`}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -935,7 +940,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       </tr>
                     </thead>
                     <tbody>
-                      {pages.slice(0, 25).map((p, i) => {
+                      {(showAllBP ? pages : pages.slice(0, 20)).map((p, i) => {
                         const slug = p.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/";
                         const barPct = Math.round(((p.refdomains_target ?? 0) / maxRefs) * 100);
                         return (
@@ -958,6 +963,13 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       })}
                     </tbody>
                   </table>
+                  {pages.length > 20 && (
+                    <div style={{ padding: "8px 12px", background: BG, borderTop: `1px solid ${BORDER}`, textAlign: "center" }}>
+                      <button onClick={() => setShowAllBP(v => !v)} style={{ fontSize: 11, color: BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                        {showAllBP ? "Show less" : `Show all ${pages.length.toLocaleString()} pages`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             );
@@ -984,7 +996,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       </tr>
                     </thead>
                     <tbody>
-                      {broken.slice(0, 50).map((b, i) => (
+                      {(showAllBroken ? broken : broken.slice(0, 20)).map((b, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid #FEE2E2`, background: i % 2 ? "#FFF5F5" : "transparent" }}>
                           <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.name_source ?? b.url_from}</td>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating_source ?? 0) }}>{b.domain_rating_source ?? "—"}</td>
@@ -994,9 +1006,11 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                       ))}
                     </tbody>
                   </table>
-                  {broken.length > 50 && (
-                    <div style={{ padding: "8px 12px", fontSize: 10, color: RED, background: "#FEF2F2", borderTop: `1px solid #FCA5A5` }}>
-                      Showing top 50 of {broken.length.toLocaleString()} broken backlinks (ordered by DR)
+                  {broken.length > 20 && (
+                    <div style={{ padding: "8px 12px", background: "#FEF2F2", borderTop: `1px solid #FCA5A5`, textAlign: "center" }}>
+                      <button onClick={() => setShowAllBroken(v => !v)} style={{ fontSize: 11, color: RED, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                        {showAllBroken ? "Show less" : `Show all ${broken.length.toLocaleString()} broken backlinks`}
+                      </button>
                     </div>
                   )}
                 </div>
