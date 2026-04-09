@@ -3,6 +3,7 @@ import { ACCENT, BG, BORDER, CARD, MUTED, TEXT } from "../lib/constants";
 import {
   getDomainRating, getDomainRatingHistory, getMetricsExtended,
   getBacklinksHistory, getRefdomains, getAnchors, getTopBacklinks,
+  getBestByLinks, getBrokenBacklinks,
   getOrganicKeywords, getSerpFeaturesHistory, getOrganicCompetitors,
 } from "../lib/ahrefs";
 
@@ -596,7 +597,9 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       safe("blhistory",  () => getBacklinksHistory(target)),
       safe("refs",       () => getRefdomains(target)),
       safe("anchors",    () => getAnchors(target)),
-      // safe("backlinks",  () => getTopBacklinks(target)),  // requires higher Ahrefs plan tier
+      safe("backlinks",  () => getTopBacklinks(target)),
+      safe("bestpages",  () => getBestByLinks(target)),
+      safe("broken",     () => getBrokenBacklinks(target)),
       safe("serp",        () => getOrganicKeywords(target)),
       safe("serptrend",   () => getSerpFeaturesHistory(target)),
       safe("competitors", () => getOrganicCompetitors(target)),
@@ -863,6 +866,143 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
               )}
             </div>
           )}
+
+          {/* ── Top Backlinks ── */}
+          {(() => {
+            const backlinks = data?.backlinks?.backlinks ?? data?.backlinks?.all_backlinks ?? [];
+            if (errors.backlinks && !backlinks.length) return <ErrBox msg={`Backlinks: ${errors.backlinks}`} />;
+            if (!backlinks.length) return null;
+            const dofollow = backlinks.filter(b => b.dofollow).length;
+            return (
+              <>
+                <SectionHeader title="Top Backlinks" color={BLUE} />
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                  <StatCard label="Total Fetched"  value={backlinks.length.toLocaleString()} />
+                  <StatCard label="Dofollow"        value={dofollow.toLocaleString()}          color={GREEN} bg="#F0FDF4" border="#BBF7D0" />
+                  <StatCard label="Nofollow"        value={(backlinks.length - dofollow).toLocaleString()} color={MUTED} />
+                </div>
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead style={{ background: BG }}>
+                      <tr>
+                        {["Source Domain","DR","Anchor","Target URL","Type"].map(h => (
+                          <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {backlinks.slice(0, 50).map((b, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 ? BG : "transparent" }}>
+                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.domain_from ?? b.url_from}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating ?? 0) }}>{b.domain_rating ?? "—"}</td>
+                          <td style={{ padding: "6px 10px", color: MUTED, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.anchor}>{b.anchor || "(empty)"}</td>
+                          <td style={{ padding: "6px 10px", color: BLUE, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_to}>{b.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/"}</td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: b.dofollow ? "#F0FDF4" : "#F9FAFB", color: b.dofollow ? GREEN : MUTED, border: `1px solid ${b.dofollow ? "#BBF7D0" : BORDER}` }}>
+                              {b.dofollow ? "dofollow" : "nofollow"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {backlinks.length > 50 && (
+                    <div style={{ padding: "8px 12px", fontSize: 10, color: MUTED, background: BG, borderTop: `1px solid ${BORDER}` }}>
+                      Showing top 50 of {backlinks.length.toLocaleString()} backlinks (ordered by DR)
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── Best Pages by Links ── */}
+          {(() => {
+            const pages = data?.bestpages?.pages ?? data?.bestpages?.best_by_links ?? [];
+            if (errors.bestpages && !pages.length) return <ErrBox msg={`Best pages: ${errors.bestpages}`} />;
+            if (!pages.length) return null;
+            const maxRefs = Math.max(...pages.map(p => p.refdomains ?? 0), 1);
+            return (
+              <>
+                <SectionHeader title="Best Pages by Referring Domains" color={GREEN} />
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead style={{ background: BG }}>
+                      <tr>
+                        {["Page","Ref. Domains","Backlinks"].map(h => (
+                          <th key={h} style={{ textAlign: h === "Page" ? "left" : "right", padding: "8px 10px", fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, borderBottom: `1px solid ${BORDER}` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pages.slice(0, 25).map((p, i) => {
+                        const slug = p.url?.replace(/^https?:\/\/[^/]+/, "") || "/";
+                        const barPct = Math.round(((p.refdomains ?? 0) / maxRefs) * 100);
+                        return (
+                          <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 ? BG : "transparent" }}>
+                            <td style={{ padding: "6px 10px", maxWidth: 380 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.url}>{slug}</div>
+                              {p.title && <div style={{ fontSize: 10, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>}
+                            </td>
+                            <td style={{ padding: "6px 10px", textAlign: "right" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                                <div style={{ width: 60, height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                                  <div style={{ width: `${barPct}%`, height: "100%", background: GREEN, borderRadius: 3 }} />
+                                </div>
+                                <span style={{ fontWeight: 700, color: GREEN, minWidth: 28, textAlign: "right" }}>{(p.refdomains ?? 0).toLocaleString()}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: "6px 10px", textAlign: "right", color: MUTED }}>{(p.backlinks ?? 0).toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── Broken Backlinks ── */}
+          {(() => {
+            const broken = data?.broken?.backlinks ?? data?.broken?.broken_backlinks ?? [];
+            if (errors.broken && !broken.length) return <ErrBox msg={`Broken backlinks: ${errors.broken}`} />;
+            if (!broken.length) return null;
+            return (
+              <>
+                <SectionHeader title={`Broken Backlinks (${broken.length.toLocaleString()})`} color={RED} />
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>
+                  External sites linking to pages that return 404 on this domain. Each is a lost link equity opportunity — reclaim with 301 redirects.
+                </div>
+                <div style={{ border: `1px solid #FCA5A5`, borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead style={{ background: "#FEF2F2" }}>
+                      <tr>
+                        {["Source Domain","DR","Anchor","Broken URL"].map(h => (
+                          <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontSize: 9, fontWeight: 700, color: RED, textTransform: "uppercase", letterSpacing: 0.6, borderBottom: `1px solid #FCA5A5` }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {broken.slice(0, 50).map((b, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid #FEE2E2`, background: i % 2 ? "#FFF5F5" : "transparent" }}>
+                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.domain_from ?? b.url_from}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating ?? 0) }}>{b.domain_rating ?? "—"}</td>
+                          <td style={{ padding: "6px 10px", color: MUTED, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.anchor || "(empty)"}</td>
+                          <td style={{ padding: "6px 10px", color: RED, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_to}>{b.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {broken.length > 50 && (
+                    <div style={{ padding: "8px 12px", fontSize: 10, color: RED, background: "#FEF2F2", borderTop: `1px solid #FCA5A5` }}>
+                      Showing top 50 of {broken.length.toLocaleString()} broken backlinks (ordered by DR)
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
 
           {/* ── SERP Intelligence ── */}
           {(() => {

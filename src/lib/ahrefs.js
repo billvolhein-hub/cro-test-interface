@@ -63,7 +63,7 @@ export async function getBacklinksHistory(target) {
 export async function getRefdomains(target) {
   // Fetch without DR ordering so we get a representative cross-section for the histogram.
   // Sorted by links_to_target (most-linking domains first) which is more useful for display.
-  return ahrefs("refdomains", {
+  return ahrefs("referring-domains", {
     target:   stripProtocol(target),
     mode:     "domain",
     select:   "domain,domain_rating,links_to_target,dofollow_links,first_seen",
@@ -83,11 +83,32 @@ export async function getAnchors(target) {
 }
 
 export async function getTopBacklinks(target) {
-  return ahrefs("backlinks", {
-    target: stripProtocol(target),
-    mode:   "domain",
-    select: "url_from,url_to,domain_from,dofollow,anchor",
-    limit:  "1000",
+  return ahrefs("all-backlinks", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "url_from,url_to,domain_from,domain_rating,dofollow,anchor",
+    limit:    "1000",
+    order_by: "domain_rating:desc",
+  });
+}
+
+export async function getBestByLinks(target) {
+  return ahrefs("best-by-links", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "url,title,refdomains,backlinks,first_seen",
+    limit:    "100",
+    order_by: "refdomains:desc",
+  });
+}
+
+export async function getBrokenBacklinks(target) {
+  return ahrefs("broken-backlinks", {
+    target:   stripProtocol(target),
+    mode:     "domain",
+    select:   "url_from,url_to,domain_from,domain_rating,dofollow,anchor",
+    limit:    "500",
+    order_by: "domain_rating:desc",
   });
 }
 
