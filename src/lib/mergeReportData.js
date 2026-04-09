@@ -219,20 +219,20 @@ function gscCol(row, metric) {
 // ── Main merge function ───────────────────────────────────────────────────────
 export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], gscQueries = [], ga4Rows = [], segmentRules = null, ahrefsData = null }) {
 
-  // Build per-page backlink index from Ahrefs backlinks array
-  // backlinks[].url_to  → internal page receiving the link
-  // backlinks[].domain_from → referring domain
+  // Build per-page backlink index from Ahrefs data.
+  // best-by-external-links → ahrefsData.data.bestpages.pages
+  //   fields: url_to, links_to_target, refdomains_target
+  // all-backlinks → ahrefsData.data.backlinks.backlinks
+  //   fields: url_to, name_source, domain_rating_source, is_dofollow, anchor
   const ahrefsByUrl = {};
-  // best-by-external-links returns { pages: [{ url, backlinks, refdomains }] }
-  // Legacy backlinks endpoint returns { backlinks: [{ url_to, domain_from }] }
-  const rawPages     = ahrefsData?.data?.backlinks?.pages     ?? [];
+  const rawPages     = ahrefsData?.data?.bestpages?.pages     ?? [];
   const rawBacklinks = ahrefsData?.data?.backlinks?.backlinks ?? [];
 
   if (rawPages.length > 0) {
     for (const pg of rawPages) {
-      if (!pg.url) continue;
-      const key = normUrl(pg.url);
-      ahrefsByUrl[key] = { count: pg.backlinks ?? 0, domains: { size: pg.refdomains ?? 0 } };
+      if (!pg.url_to) continue;
+      const key = normUrl(pg.url_to);
+      ahrefsByUrl[key] = { count: pg.links_to_target ?? 0, domains: { size: pg.refdomains_target ?? 0 } };
     }
   } else {
     for (const bl of rawBacklinks) {
@@ -240,7 +240,7 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
       const key = normUrl(bl.url_to);
       if (!ahrefsByUrl[key]) ahrefsByUrl[key] = { count: 0, domains: new Set() };
       ahrefsByUrl[key].count++;
-      if (bl.domain_from) ahrefsByUrl[key].domains.add(bl.domain_from);
+      if (bl.name_source) ahrefsByUrl[key].domains.add(bl.name_source);
     }
   }
   const hasAhrefs = rawPages.length > 0 || rawBacklinks.length > 0;
@@ -410,6 +410,8 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
     row.engaged_no_convert_flag  = row.avg_engagement_time > 30 && row.views > 0;
     row.impression_black_hole_flag = row.impressions > 500 && row.ctr < 0.005;
     row.deep_no_traffic_flag     = row.word_count > 1000 && row.impressions < 50;
+    row.ranking_velocity_flag    = row.position >= 11 && row.position <= 25 && row.avg_engagement_time > 60 && row.views > 0;
+    row.freshness_risk_flag      = row.position >= 1 && row.position <= 15 && row.impressions > 100 && row.word_count > 0 && row.word_count < 600;
     // Ahrefs-enhanced flags (only set when Ahrefs data is present)
     row.ext_orphan_flag          = hasAhrefs && row.ext_refdomains > 0 && row.inlinks < 3; // external authority, no internal support
   }
@@ -655,6 +657,26 @@ function buildInsights(merged, hasAhrefs = false, gscQueries = []) {
       priority: "high",
       recommendation: "Pages with the lowest scores have compounding problems across multiple channels. Fix in order.",
       pages: [...merged].sort((a, b) => a.page_score - b.page_score),
+    },
+
+    ranking_velocity: {
+      id: "ranking-velocity",
+      title: "Ranking Velocity Opportunities",
+      description: "Pages sitting on page 2–3 where users who do land spend significant time — strong engagement signals that Google hasn't rewarded with page 1 placement yet.",
+      priority: "high",
+      recommendation: "These pages satisfy intent when visitors arrive but can't break through to page 1. Add internal links from high-authority pages, tighten title/H1 alignment, and consider a targeted backlink push. The engagement data proves the content is good — it just needs a visibility boost.",
+      pages: merged.filter(r => r.ranking_velocity_flag)
+        .sort((a, b) => b.avg_engagement_time - a.avg_engagement_time),
+    },
+
+    content_freshness_risk: {
+      id: "content-freshness-risk",
+      title: "Content Freshness Risk",
+      description: "Pages currently ranking in positions 1–15 with fewer than 600 words. They're earning traffic now but are exposed to quality-signal algorithm updates.",
+      priority: "medium",
+      recommendation: "Expand these pages to 800+ words before traffic drops. Add supporting sections: FAQs, comparisons, updated statistics, or a related content block. Thin pages that rank are the easiest to lose and the easiest to protect with a content investment.",
+      pages: merged.filter(r => r.freshness_risk_flag)
+        .sort((a, b) => b.impressions - a.impressions),
     },
 
     keyword_intent_gap: (() => {

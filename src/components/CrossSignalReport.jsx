@@ -1124,6 +1124,250 @@ function DeepContentChart({ pages }) {
   );
 }
 
+// ── Ranking Velocity chart ────────────────────────────────────────────────────
+function RankingVelocityChart({ pages }) {
+  if (!pages?.length) return null;
+
+  const W = 600, H = 250;
+  const ML = 60, MR = 124, MT = 24, MB = 40;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  const maxTime = Math.max(...pages.map(p => p.avg_engagement_time || 0), 120);
+  const maxViews = Math.max(...pages.map(p => p.views || 0), 10);
+  const maxEng  = Math.max(...pages.map(p => p.engagement_rate || 0), 0.01);
+
+  // X = position (11–25), Y = avg_engagement_time (log), size = views, color = engagement_rate
+  const X_MIN = 10.5, X_MAX = 25.5;
+  const xScale = pos => ML + ((Math.min(Math.max(pos, X_MIN), X_MAX) - X_MIN) / (X_MAX - X_MIN)) * PW;
+  const yScale = t   => MT + PH - (Math.log(Math.max(t, 1)) / Math.log(maxTime)) * PH;
+  const rScale = v   => Math.max(4, Math.min(10, 4 + Math.sqrt((v || 0) / maxViews) * 7));
+  const dotColor = er => er > 0.5 ? "#7C3AED" : er > 0.3 ? "#3B82F6" : er > 0.1 ? "#14B8A6" : "#94A3B8";
+
+  // Page 2 vs page 3 boundary
+  const p2BoundX = xScale(15.5);
+  const medTime  = [...pages].sort((a, b) => (a.avg_engagement_time || 0) - (b.avg_engagement_time || 0))[Math.floor(pages.length / 2)]?.avg_engagement_time || 60;
+  const medY     = yScale(medTime);
+
+  const p2Count = pages.filter(p => p.position <= 15).length;
+  const p3Count = pages.filter(p => p.position > 15).length;
+  const avgTime = pages.reduce((s, p) => s + (p.avg_engagement_time || 0), 0) / pages.length;
+  const highEng = pages.filter(p => (p.engagement_rate || 0) > 0.4).length;
+
+  const fmtTime = s => { const m = Math.floor(s / 60), sec = Math.round(s % 60); return m > 0 ? `${m}m ${sec}s` : `${sec}s`; };
+  const yTickVals = [30, 60, 120, 180, 300, 600].filter(v => v <= maxTime);
+  const xTicks   = [11, 12, 13, 14, 15, 16, 18, 20, 25].filter(v => v <= X_MAX);
+
+  return (
+    <div style={{ margin: "0 0 16px 0", padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", flex: "1 1 auto", minWidth: 0 }}>
+          {/* Zone backgrounds */}
+          <rect x={ML}        y={MT} width={p2BoundX - ML}      height={PH} fill="#EFF6FF" />
+          <rect x={p2BoundX}  y={MT} width={ML + PW - p2BoundX} height={PH} fill="#F5F3FF" />
+
+          {/* Zone labels */}
+          <text x={ML + (p2BoundX - ML) / 2} y={MT + 13} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#2563EB" fontFamily="Inter,sans-serif" letterSpacing="0.4">PAGE 2 (11–15)</text>
+          <text x={p2BoundX + (ML + PW - p2BoundX) / 2} y={MT + 13} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#7C3AED" fontFamily="Inter,sans-serif" letterSpacing="0.4">PAGE 3+ (16–25)</text>
+
+          {/* Zone divider */}
+          <line x1={p2BoundX} y1={MT} x2={p2BoundX} y2={MT + PH} stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="5,3" />
+
+          {/* Median engagement line */}
+          <line x1={ML} y1={medY} x2={ML + PW} y2={medY} stroke="#7C3AED" strokeWidth={1} strokeDasharray="4,2" strokeOpacity={0.4} />
+          <text x={ML + PW + 2} y={medY + 3} fontSize={8} fill="#7C3AED" fontFamily="Inter,sans-serif" opacity={0.7}>med</text>
+
+          {/* Y gridlines */}
+          {yTickVals.map(v => {
+            const y = yScale(v);
+            return (
+              <g key={v}>
+                <line x1={ML} y1={y} x2={ML + PW} y2={y} stroke={BORDER} strokeWidth={1} />
+                <text x={ML - 6} y={y + 4} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">{fmtTime(v)}</text>
+              </g>
+            );
+          })}
+
+          {/* X gridlines */}
+          {xTicks.map(v => {
+            const x = xScale(v);
+            return (
+              <g key={v}>
+                <line x1={x} y1={MT} x2={x} y2={MT + PH} stroke={BORDER} strokeWidth={1} strokeDasharray="3,2" />
+                <text x={x} y={MT + PH + 15} textAnchor="middle" fontSize={9} fill={v <= 15 ? "#2563EB" : MUTED} fontWeight={v <= 15 ? 700 : 400} fontFamily="Inter,sans-serif">#{v}</text>
+              </g>
+            );
+          })}
+
+          {/* Axes */}
+          <line x1={ML} y1={MT} x2={ML} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+          <line x1={ML} y1={MT + PH} x2={ML + PW} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+
+          {/* Axis labels */}
+          <text x={ML + PW / 2} y={H - 4} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">Search Position</text>
+          <text x={10} y={MT + PH / 2} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif" transform={`rotate(-90,10,${MT + PH / 2})`}>Engagement Time (log)</text>
+
+          {/* Dots — large views behind */}
+          {[...pages].sort((a, b) => (b.views || 0) - (a.views || 0)).map((p, i) => {
+            const x = xScale(p.position), y = yScale(p.avg_engagement_time || 1);
+            const r = rScale(p.views), col = dotColor(p.engagement_rate || 0);
+            return <circle key={i} cx={x} cy={y} r={r} fill={col} fillOpacity={0.7} stroke="#fff" strokeWidth={1.5} />;
+          })}
+        </svg>
+
+        {/* Stats sidebar */}
+        <div style={{ width: 110, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, paddingTop: MT }}>
+          {[
+            { label: "Pages",         value: pages.length,      color: TEXT      },
+            { label: "On Page 2",     value: p2Count,           color: "#2563EB", sub: "pos 11–15" },
+            { label: "On Page 3+",    value: p3Count,           color: "#7C3AED", sub: "pos 16–25" },
+            { label: "Avg Eng. Time", value: fmtTime(Math.round(avgTime)), color: "#7C3AED" },
+            { label: "High Eng. Rate", value: highEng,          color: "#22C55E", sub: "> 40%" },
+          ].map(({ label, value, color, sub }) => (
+            <div key={label} style={{ background: "#F8FAFC", borderRadius: 6, padding: "6px 10px", border: `1px solid ${BORDER}` }}>
+              <div style={{ fontSize: 8.5, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
+              {sub && <div style={{ fontSize: 8, color: MUTED, marginTop: 2 }}>{sub}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginTop: 6, paddingLeft: ML }}>
+        {[["Eng. rate > 50%", "#7C3AED"], ["30–50%", "#3B82F6"], ["10–30%", "#14B8A6"], ["< 10%", "#94A3B8"]].map(([label, color]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width={10} height={10}><circle cx={5} cy={5} r={4} fill={color} fillOpacity={0.75} stroke="#fff" strokeWidth={1} /></svg>
+            <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>{label}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={22} height={10}><circle cx={4} cy={5} r={3} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /><circle cx={16} cy={5} r={5} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /></svg>
+          <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>size = views</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Content Freshness Risk chart ───────────────────────────────────────────────
+function FreshnessRiskChart({ pages }) {
+  if (!pages?.length) return null;
+
+  const W = 600, H = 250;
+  const ML = 48, MR = 124, MT = 24, MB = 40;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  const maxImp = Math.max(...pages.map(p => p.impressions || 0), 1);
+  // X = word count (0–600), Y = position (1–15), size = impressions
+  const xScale = wc  => ML + (Math.min(wc, 600) / 600) * PW;
+  const yScale = pos => MT + ((Math.min(Math.max(pos, 1), 15) - 1) / 14) * PH;
+  const rScale = imp => Math.max(3.5, Math.min(10, 3.5 + Math.sqrt(imp / maxImp) * 7));
+  const dotColor = wc => wc < 150 ? "#EF4444" : wc < 300 ? "#F97316" : "#F59E0B";
+
+  // Risk zone: < 300 words
+  const riskX = xScale(300);
+  const critX = xScale(150);
+
+  const critCount   = pages.filter(p => (p.word_count || 0) < 150).length;
+  const warnCount   = pages.filter(p => (p.word_count || 0) >= 150 && (p.word_count || 0) < 300).length;
+  const thinCount   = pages.filter(p => (p.word_count || 0) >= 300 && (p.word_count || 0) < 600).length;
+  const avgWords    = Math.round(pages.reduce((s, p) => s + (p.word_count || 0), 0) / pages.length);
+  const totalImpr   = pages.reduce((s, p) => s + (p.impressions || 0), 0);
+
+  const yTicks = [1, 3, 5, 10, 15];
+  const xTicks = [0, 150, 300, 450, 600];
+
+  return (
+    <div style={{ margin: "0 0 16px 0", padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", flex: "1 1 auto", minWidth: 0 }}>
+          {/* Risk zone backgrounds */}
+          <rect x={ML}    y={MT} width={critX - ML}      height={PH} fill="#FEF2F2" />
+          <rect x={critX} y={MT} width={riskX - critX}   height={PH} fill="#FFF7ED" />
+          <rect x={riskX} y={MT} width={ML + PW - riskX} height={PH} fill="#FFFBEB" />
+
+          {/* Zone labels */}
+          <text x={ML + (critX - ML) / 2}         y={MT + PH - 6} textAnchor="middle" fontSize={8} fontWeight={700} fill="#EF4444" fontFamily="Inter,sans-serif" letterSpacing="0.4">CRITICAL</text>
+          <text x={critX + (riskX - critX) / 2}   y={MT + PH - 6} textAnchor="middle" fontSize={8} fontWeight={700} fill="#F97316" fontFamily="Inter,sans-serif" letterSpacing="0.4">HIGH RISK</text>
+          <text x={riskX + (ML + PW - riskX) / 2} y={MT + PH - 6} textAnchor="middle" fontSize={8} fontWeight={700} fill="#D97706" fontFamily="Inter,sans-serif" letterSpacing="0.4">WATCH</text>
+
+          {/* Zone dividers */}
+          <line x1={critX} y1={MT} x2={critX} y2={MT + PH} stroke="#FCA5A5" strokeWidth={1} strokeDasharray="4,3" />
+          <line x1={riskX} y1={MT} x2={riskX} y2={MT + PH} stroke="#FCD34D" strokeWidth={1} strokeDasharray="4,3" />
+
+          {/* Y gridlines */}
+          {yTicks.map(v => {
+            const y = yScale(v);
+            return (
+              <g key={v}>
+                <line x1={ML} y1={y} x2={ML + PW} y2={y} stroke={BORDER} strokeWidth={1} />
+                <text x={ML - 6} y={y + 4} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">#{v}</text>
+              </g>
+            );
+          })}
+
+          {/* X gridlines */}
+          {xTicks.map(v => {
+            const x = xScale(v);
+            return (
+              <g key={v}>
+                <line x1={x} y1={MT} x2={x} y2={MT + PH} stroke={BORDER} strokeWidth={1} strokeDasharray="3,2" />
+                <text x={x} y={MT + PH + 15} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">{v}w</text>
+              </g>
+            );
+          })}
+
+          {/* Axes */}
+          <line x1={ML} y1={MT} x2={ML} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+          <line x1={ML} y1={MT + PH} x2={ML + PW} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+
+          {/* Axis labels */}
+          <text x={ML + PW / 2} y={H - 4} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">Word Count →</text>
+          <text x={10} y={MT + PH / 2} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif" transform={`rotate(-90,10,${MT + PH / 2})`}>Search Position</text>
+
+          {/* Dots — largest impressions behind */}
+          {[...pages].sort((a, b) => (b.impressions || 0) - (a.impressions || 0)).map((p, i) => {
+            const x = xScale(p.word_count || 0), y = yScale(p.position || 1);
+            const r = rScale(p.impressions), col = dotColor(p.word_count || 0);
+            return <circle key={i} cx={x} cy={y} r={r} fill={col} fillOpacity={0.7} stroke="#fff" strokeWidth={1.5} />;
+          })}
+        </svg>
+
+        {/* Stats sidebar */}
+        <div style={{ width: 110, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, paddingTop: MT }}>
+          {[
+            { label: "Pages",        value: pages.length,                                                color: TEXT      },
+            { label: "Critical",     value: critCount,  sub: "< 150 words",                             color: "#EF4444" },
+            { label: "High Risk",    value: warnCount,  sub: "150–299 words",                           color: "#F97316" },
+            { label: "Watch",        value: thinCount,  sub: "300–599 words",                           color: "#D97706" },
+            { label: "Total Impr.",  value: totalImpr >= 1000 ? `${(totalImpr / 1000).toFixed(1)}k` : totalImpr, color: TEXT },
+          ].map(({ label, value, color, sub }) => (
+            <div key={label} style={{ background: "#F8FAFC", borderRadius: 6, padding: "6px 10px", border: `1px solid ${BORDER}` }}>
+              <div style={{ fontSize: 8.5, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
+              {sub && <div style={{ fontSize: 8, color: MUTED, marginTop: 2 }}>{sub}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginTop: 6, paddingLeft: ML }}>
+        {[["< 150 words (critical)", "#EF4444"], ["150–299 (high risk)", "#F97316"], ["300–599 (watch)", "#F59E0B"]].map(([label, color]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width={10} height={10}><circle cx={5} cy={5} r={4} fill={color} fillOpacity={0.75} stroke="#fff" strokeWidth={1} /></svg>
+            <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>{label}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={22} height={10}><circle cx={4} cy={5} r={3} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /><circle cx={16} cy={5} r={5} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /></svg>
+          <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>size = impressions</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Keyword Intent Landscape chart ────────────────────────────────────────────
 function IntentLandscapeChart({ pages }) {
   if (!pages?.length) return null;
@@ -1618,12 +1862,34 @@ const INSIGHT_COLUMNS = {
     { key: "key_events",   label: "Key Events",  sortKey: "key_events",   render: r => fmt(r.key_events) },
     COVERAGE_COL,
   ],
+  "ranking-velocity": [
+    URL_COL,
+    { key: "position",            label: "Pos",          sortKey: "position",            render: r => fmt(r.position, 1) },
+    { key: "avg_engagement_time", label: "Avg Eng. Time", sortKey: "avg_engagement_time", render: r => {
+      const s = Math.round(r.avg_engagement_time || 0);
+      const m = Math.floor(s / 60), sec = s % 60;
+      return <span style={{ fontWeight: 700, color: "#7C3AED" }}>{m > 0 ? `${m}m ${sec}s` : `${sec}s`}</span>;
+    }},
+    { key: "views",           label: "Views",       sortKey: "views",           render: r => fmt(r.views) },
+    { key: "impressions",     label: "Impressions", sortKey: "impressions",     render: r => fmt(r.impressions) },
+    { key: "engagement_rate", label: "Eng. Rate",   sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate) },
+    COVERAGE_COL,
+  ],
+  "content-freshness-risk": [
+    URL_COL,
+    { key: "position",    label: "Pos",        sortKey: "position",    render: r => fmt(r.position, 1) },
+    { key: "impressions", label: "Impressions", sortKey: "impressions", render: r => fmt(r.impressions) },
+    { key: "word_count",  label: "Words",      sortKey: "word_count",  render: r => <span style={{ fontWeight: 700, color: (r.word_count || 0) < 300 ? "#DC2626" : "#F97316" }}>{fmt(r.word_count)}</span> },
+    { key: "clicks",      label: "Clicks",     sortKey: "clicks",      render: r => fmt(r.clicks) },
+    COVERAGE_COL,
+  ],
 };
 
 const INSIGHT_ORDER = [
   "full_funnel", "ctr_opportunity", "thin_traffic",
   "ranking_not_converting", "position_cliff", "orphan_pages",
   "engaged_no_convert", "impression_black_hole", "deep_no_traffic",
+  "ranking_velocity", "content_freshness_risk",
   "intent_mismatch", "keyword_intent_gap", "query_expansion_gap",
   "segment_health",
 ];
@@ -1640,10 +1906,12 @@ const SLIM_FIELDS = {
   "impression-black-hole":  ["Address", "data_coverage", "impressions", "ctr", "position", "clicks"],
   "deep-no-traffic":        ["Address", "data_coverage", "word_count", "impressions", "clicks", "inlinks", "ext_refdomains"],
   "intent-mismatch":        ["Address", "data_coverage", "h1", "Title 1", "Meta Description 1", "sim_title_h1", "sim_title_meta", "sim_h1_meta", "alignment_score", "alignment_field_count", "position", "impressions"],
-  "segment-health":         null, // segment rows are already slim
-  "full-funnel":            ["Address", "data_coverage", "page_score", "impressions", "clicks", "views", "key_events"],
-  "keyword-intent-gap":     null, // query rows are already slim
-  "query-expansion-gap":    null, // query rows are already slim
+  "segment-health":           null,
+  "full-funnel":              ["Address", "data_coverage", "page_score", "impressions", "clicks", "views", "key_events"],
+  "ranking-velocity":         ["Address", "data_coverage", "position", "avg_engagement_time", "views", "impressions", "engagement_rate"],
+  "content-freshness-risk":   ["Address", "data_coverage", "position", "impressions", "word_count", "clicks"],
+  "keyword-intent-gap":       null,
+  "query-expansion-gap":      null,
 };
 
 function slimForSave(insights) {
@@ -1835,6 +2103,8 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
             deep_no_traffic_flag: r.deep_no_traffic_flag,
             ext_backlinks: r.ext_backlinks, ext_refdomains: r.ext_refdomains,
             ext_orphan_flag: r.ext_orphan_flag,
+            ranking_velocity_flag: r.ranking_velocity_flag,
+            freshness_risk_flag: r.freshness_risk_flag,
           }));
           sessionStorage.setItem(SESSION_ROWS_KEY, JSON.stringify(slim));
           sessionStorage.setItem(SESSION_META_KEY, JSON.stringify(result.meta));
@@ -2094,6 +2364,8 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
                 const isFullFunnel  = insight.id === "full-funnel";
                 const isIntentGap   = insight.id === "keyword-intent-gap";
                 const isQueryGap    = insight.id === "query-expansion-gap";
+                const isVelocity    = insight.id === "ranking-velocity";
+                const isFreshness   = insight.id === "content-freshness-risk";
                 return (
                   <InsightPanel
                     key={key}
@@ -2113,6 +2385,8 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
                       isFullFunnel? <FullFunnelChart          pages={insight.pages}    /> :
                       isIntentGap ? <IntentLandscapeChart     pages={insight.pages}    /> :
                       isQueryGap  ? <QueryGapChart            pages={insight.pages}    /> :
+                      isVelocity  ? <RankingVelocityChart     pages={insight.pages}    /> :
+                      isFreshness ? <FreshnessRiskChart       pages={insight.pages}    /> :
                       undefined
                     }
                     headerAction={isSegment ? (
