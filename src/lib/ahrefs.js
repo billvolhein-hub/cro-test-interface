@@ -96,7 +96,7 @@ export async function getBestByLinks(target) {
   return ahrefs("best-by-external-links", {
     target: stripProtocol(target),
     mode:   "domain",
-    select: "url,title,refdomains,backlinks",
+    select: "url_to,title_target,refdomains_target,links_to_target",
     limit:  "100",
   });
 }

@@ -921,7 +921,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
             const pages = data?.bestpages?.pages ?? data?.bestpages?.best_by_links ?? [];
             if (errors.bestpages && !pages.length) return <ErrBox msg={`Best pages: ${errors.bestpages}`} />;
             if (!pages.length) return null;
-            const maxRefs = Math.max(...pages.map(p => p.refdomains ?? 0), 1);
+            const maxRefs = Math.max(...pages.map(p => p.refdomains_target ?? 0), 1);
             return (
               <>
                 <SectionHeader title="Best Pages by Referring Domains" color={GREEN} />
@@ -936,23 +936,23 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     </thead>
                     <tbody>
                       {pages.slice(0, 25).map((p, i) => {
-                        const slug = p.url?.replace(/^https?:\/\/[^/]+/, "") || "/";
-                        const barPct = Math.round(((p.refdomains ?? 0) / maxRefs) * 100);
+                        const slug = p.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/";
+                        const barPct = Math.round(((p.refdomains_target ?? 0) / maxRefs) * 100);
                         return (
                           <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 ? BG : "transparent" }}>
                             <td style={{ padding: "6px 10px", maxWidth: 380 }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.url}>{slug}</div>
-                              {p.title && <div style={{ fontSize: 10, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>}
+                              <div style={{ fontSize: 11, fontWeight: 600, color: BLUE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.url_to}>{slug}</div>
+                              {p.title_target && <div style={{ fontSize: 10, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title_target}</div>}
                             </td>
                             <td style={{ padding: "6px 10px", textAlign: "right" }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
                                 <div style={{ width: 60, height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
                                   <div style={{ width: `${barPct}%`, height: "100%", background: GREEN, borderRadius: 3 }} />
                                 </div>
-                                <span style={{ fontWeight: 700, color: GREEN, minWidth: 28, textAlign: "right" }}>{(p.refdomains ?? 0).toLocaleString()}</span>
+                                <span style={{ fontWeight: 700, color: GREEN, minWidth: 28, textAlign: "right" }}>{(p.refdomains_target ?? 0).toLocaleString()}</span>
                               </div>
                             </td>
-                            <td style={{ padding: "6px 10px", textAlign: "right", color: MUTED }}>{(p.backlinks ?? 0).toLocaleString()}</td>
+                            <td style={{ padding: "6px 10px", textAlign: "right", color: MUTED }}>{(p.links_to_target ?? 0).toLocaleString()}</td>
                           </tr>
                         );
                       })}
