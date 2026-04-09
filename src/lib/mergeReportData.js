@@ -245,6 +245,16 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
   }
   const hasAhrefs = rawPages.length > 0 || rawBacklinks.length > 0;
 
+  // Per-page average DR — only computable from all-backlinks (rawPages has no per-link DR)
+  const drByUrl = {};
+  for (const bl of rawBacklinks) {
+    if (!bl.url_to || !bl.domain_rating_source) continue;
+    const key = normUrl(bl.url_to);
+    if (!drByUrl[key]) drByUrl[key] = { sum: 0, count: 0 };
+    drByUrl[key].sum += Number(bl.domain_rating_source) || 0;
+    drByUrl[key].count++;
+  }
+
   // Index GSC by normalized URL
   const gscByUrl = {};
   for (const row of gscPages) {
@@ -350,6 +360,8 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
     const ahrefsEntry    = ahrefsByUrl[urlNorm] ?? null;
     const ext_backlinks  = ahrefsEntry?.count        ?? 0;
     const ext_refdomains = ahrefsEntry?.domains.size ?? 0;
+    const drEntry        = drByUrl[urlNorm];
+    const ext_avg_dr     = drEntry && drEntry.count > 0 ? Math.round(drEntry.sum / drEntry.count) : 0;
 
     // On-page alignment scoring (Title ↔ H1 ↔ Meta Description)
     const titleToks = tokenize(sfRow["Title 1"] || "");
@@ -379,7 +391,7 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
       views, key_events, bounce_rate, engagement_rate, avg_engagement_time, event_count,
       inlinks, word_count, response_time, h1, has_sf_issues,
       sim_title_h1, sim_title_meta, sim_h1_meta, alignment_score, alignment_field_count,
-      ext_backlinks, ext_refdomains,
+      ext_backlinks, ext_refdomains, ext_avg_dr,
     });
   }
 
@@ -417,6 +429,11 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
   }
 
   const insights = buildInsights(merged, hasAhrefs, gscQueries);
+
+  if (hasAhrefs) {
+    const broken = buildBrokenLinkReclamation(ahrefsData);
+    if (broken) insights.broken_link_reclamation = broken;
+  }
 
   const segmentCounts = {};
   for (const r of merged) segmentCounts[r.segment] = (segmentCounts[r.segment] || 0) + 1;
@@ -476,7 +493,7 @@ export function mergeReportData({ sfRows = [], sfIssueRows = [], gscPages = [], 
 // ── Re-apply segments to cached merged rows (no re-upload needed) ─────────────
 // Takes the already-merged rows stored in report.merged_rows, reassigns each
 // row's segment field using the new rules, and rebuilds all insights.
-export function reapplySegments(mergedRows, newRules, existingMeta, gscQueries = []) {
+export function reapplySegments(mergedRows, newRules, existingMeta, gscQueries = [], preserveInsights = {}) {
   const resegged = mergedRows.map(row => ({
     ...row,
     segment: segmentUrl(row["Address"] || "", newRules),
@@ -484,7 +501,7 @@ export function reapplySegments(mergedRows, newRules, existingMeta, gscQueries =
   const segmentCounts = {};
   for (const r of resegged) segmentCounts[r.segment] = (segmentCounts[r.segment] || 0) + 1;
   const hasAhrefs = resegged.some(r => r.ext_refdomains > 0);
-  const insights = buildInsights(resegged, hasAhrefs, gscQueries);
+  const insights = { ...buildInsights(resegged, hasAhrefs, gscQueries), ...preserveInsights };
   return {
     meta:        { ...(existingMeta || {}), segments: segmentCounts },
     merged_rows: resegged,
@@ -737,6 +754,45 @@ function buildInsights(merged, hasAhrefs = false, gscQueries = []) {
         pages: rows,
       };
     })(),
+  };
+}
+
+function buildBrokenLinkReclamation(ahrefsData) {
+  const brokenBacklinks = ahrefsData?.data?.broken?.backlinks ?? [];
+  if (!brokenBacklinks.length) return null;
+
+  // Group individual broken backlinks by their target URL
+  const byTarget = {};
+  for (const bl of brokenBacklinks) {
+    if (!bl.url_to) continue;
+    const key = bl.url_to;
+    if (!byTarget[key]) byTarget[key] = { url: key, links: [], domains: new Set() };
+    byTarget[key].links.push(bl);
+    if (bl.name_source) byTarget[key].domains.add(bl.name_source);
+  }
+
+  const pages = Object.values(byTarget).map(entry => {
+    const drs      = entry.links.map(l => Number(l.domain_rating_source) || 0).filter(d => d > 0);
+    const dofollow = entry.links.filter(l => l.is_dofollow).length;
+    return {
+      Address:             entry.url,
+      incoming_links:      entry.links.length,
+      incoming_refdomains: entry.domains.size,
+      avg_incoming_dr:     drs.length ? Math.round(drs.reduce((s, d) => s + d, 0) / drs.length) : 0,
+      top_incoming_dr:     drs.length ? Math.max(...drs) : 0,
+      dofollow_count:      dofollow,
+    };
+  }).sort((a, b) => b.top_incoming_dr - a.top_incoming_dr || b.incoming_refdomains - a.incoming_refdomains);
+
+  if (!pages.length) return null;
+
+  return {
+    id:             "broken-link-reclamation",
+    title:          "Broken Link Reclamation",
+    description:    `${pages.length} URLs on this domain are receiving backlinks from external sites but returning 404. Each is a 301 redirect opportunity — recover the link equity before it decays.`,
+    priority:       "high",
+    recommendation: "Set up 301 redirects from each broken URL to the closest live page. Prioritize by Top DR — a single high-DR broken link recovered is worth more than dozens of low-DR ones.",
+    pages,
   };
 }
 

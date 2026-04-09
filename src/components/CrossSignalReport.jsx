@@ -1124,6 +1124,115 @@ function DeepContentChart({ pages }) {
   );
 }
 
+// ── Broken Link Reclamation chart ─────────────────────────────────────────────
+function BrokenLinkReclamationChart({ pages }) {
+  if (!pages?.length) return null;
+
+  const W = 600, H = 250;
+  const ML = 50, MR = 124, MT = 24, MB = 40;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  const maxRD  = Math.max(...pages.map(p => p.incoming_refdomains || 0), 1);
+  const maxLnk = Math.max(...pages.map(p => p.incoming_links     || 0), 1);
+
+  // X = avg DR (0–100), Y = referring domains (log), size = incoming_links
+  const xScale = dr  => ML + (Math.min(dr, 100) / 100) * PW;
+  const yScale = rd  => MT + PH - (Math.log(Math.max(rd, 1)) / Math.log(maxRD)) * PH;
+  const rScale = lnk => Math.max(4, Math.min(10, 4 + Math.sqrt(lnk / maxLnk) * 7));
+  const dotColor = dr => dr >= 60 ? "#16A34A" : dr >= 40 ? "#D97706" : dr >= 20 ? "#F97316" : "#EF4444";
+
+  // Priority quadrant: avg DR ≥ 40 AND refdomains ≥ 2
+  const priBoundX = xScale(40);
+  const priBoundY = yScale(2);
+
+  const highDR    = pages.filter(p => (p.avg_incoming_dr || 0) >= 60).length;
+  const totalRD   = pages.reduce((s, p) => s + (p.incoming_refdomains || 0), 0);
+  const totalDof  = pages.reduce((s, p) => s + (p.dofollow_count || 0), 0);
+
+  const yTicks = [1, 2, 5, 10, 20, 50].filter(v => v <= maxRD * 1.2);
+  const xTicks = [0, 20, 40, 60, 80, 100];
+
+  return (
+    <div style={{ margin: "0 0 16px 0", padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", flex: "1 1 auto", minWidth: 0 }}>
+          {/* Priority quadrant */}
+          <rect x={priBoundX} y={MT} width={ML + PW - priBoundX} height={priBoundY - MT} fill="#F0FDF4" rx={3} />
+          <text x={ML + PW - 4} y={MT + 12} textAnchor="end" fontSize={8} fontWeight={700} fill="#16A34A" fontFamily="Inter,sans-serif" letterSpacing="0.5">FIX FIRST</text>
+          <line x1={priBoundX} y1={MT} x2={priBoundX} y2={priBoundY} stroke="#16A34A" strokeWidth={1} strokeDasharray="3,2" strokeOpacity={0.4} />
+          <line x1={priBoundX} y1={priBoundY} x2={ML + PW} y2={priBoundY} stroke="#16A34A" strokeWidth={1} strokeDasharray="3,2" strokeOpacity={0.4} />
+
+          {/* Y gridlines */}
+          {yTicks.map(v => {
+            const y = yScale(v);
+            return (
+              <g key={v}>
+                <line x1={ML} y1={y} x2={ML + PW} y2={y} stroke={BORDER} strokeWidth={1} />
+                <text x={ML - 6} y={y + 4} textAnchor="end" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">{v}</text>
+              </g>
+            );
+          })}
+
+          {/* X gridlines */}
+          {xTicks.map(v => {
+            const x = xScale(v);
+            return (
+              <g key={v}>
+                <line x1={x} y1={MT} x2={x} y2={MT + PH} stroke={BORDER} strokeWidth={1} strokeDasharray="3,2" />
+                <text x={x} y={MT + PH + 15} textAnchor="middle" fontSize={9} fill={v >= 60 ? "#16A34A" : v >= 40 ? "#D97706" : MUTED} fontWeight={v >= 40 ? 700 : 400} fontFamily="Inter,sans-serif">{v}</text>
+              </g>
+            );
+          })}
+
+          {/* Axes */}
+          <line x1={ML} y1={MT} x2={ML} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+          <line x1={ML} y1={MT + PH} x2={ML + PW} y2={MT + PH} stroke="#CBD5E1" strokeWidth={1.5} />
+
+          {/* Axis labels */}
+          <text x={ML + PW / 2} y={H - 4} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif">Avg DR of Linking Sites →</text>
+          <text x={10} y={MT + PH / 2} textAnchor="middle" fontSize={9} fill={MUTED} fontFamily="Inter,sans-serif" transform={`rotate(-90,10,${MT + PH / 2})`}>Referring Domains (log)</text>
+
+          {/* Dots — largest links count behind */}
+          {[...pages].sort((a, b) => (b.incoming_links || 0) - (a.incoming_links || 0)).map((p, i) => {
+            const x = xScale(p.avg_incoming_dr || 0), y = yScale(p.incoming_refdomains || 1);
+            const r = rScale(p.incoming_links), col = dotColor(p.avg_incoming_dr || 0);
+            return <circle key={i} cx={x} cy={y} r={r} fill={col} fillOpacity={0.75} stroke="#fff" strokeWidth={1.5} />;
+          })}
+        </svg>
+
+        {/* Stats sidebar */}
+        <div style={{ width: 110, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, paddingTop: MT }}>
+          {[
+            { label: "Broken URLs",   value: pages.length,                                                          color: "#DC2626" },
+            { label: "High DR (60+)", value: highDR,                                                                color: "#16A34A" },
+            { label: "Total Ref. Dom", value: totalRD.toLocaleString(),                                             color: "#7C3AED" },
+            { label: "Dofollow Links", value: totalDof.toLocaleString(),                                            color: TEXT      },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ background: "#F8FAFC", borderRadius: 6, padding: "6px 10px", border: `1px solid ${BORDER}` }}>
+              <div style={{ fontSize: 8.5, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginTop: 6, paddingLeft: ML }}>
+        {[["DR 60+ (high)", "#16A34A"], ["DR 40–59 (med)", "#D97706"], ["DR 20–39", "#F97316"], ["DR < 20", "#EF4444"]].map(([label, color]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width={10} height={10}><circle cx={5} cy={5} r={4} fill={color} fillOpacity={0.8} stroke="#fff" strokeWidth={1} /></svg>
+            <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>{label}</span>
+          </div>
+        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={22} height={10}><circle cx={4} cy={5} r={3} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /><circle cx={16} cy={5} r={5} fill="#94A3B8" fillOpacity={0.4} stroke="#fff" strokeWidth={1} /></svg>
+          <span style={{ fontSize: 9, color: MUTED, fontFamily: "Inter,sans-serif" }}>size = total backlinks</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Ranking Velocity chart ────────────────────────────────────────────────────
 function RankingVelocityChart({ pages }) {
   if (!pages?.length) return null;
@@ -1761,6 +1870,7 @@ const INSIGHT_COLUMNS = {
     { key: "impressions",    label: "Impressions",   sortKey: "impressions",    render: r => fmt(r.impressions) },
     { key: "ctr",            label: "CTR",                                      render: r => fmtPct(r.ctr) },
     { key: "ext_refdomains", label: "Ref. Domains",  sortKey: "ext_refdomains", render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
+    { key: "ext_avg_dr",     label: "Avg DR",        sortKey: "ext_avg_dr",     render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     { key: "has_sf_issues",  label: "SF Issues",                                render: r => r.has_sf_issues ? <span style={{ color: "#DC2626" }}>Yes</span> : <span style={{ color: "#16A34A" }}>None</span> },
     COVERAGE_COL,
   ],
@@ -1769,6 +1879,7 @@ const INSIGHT_COLUMNS = {
     { key: "views",          label: "Views",          sortKey: "views",          render: r => fmt(r.views) },
     { key: "inlinks",        label: "Internal Links", sortKey: "inlinks",        render: r => <span style={{ color: r.inlinks < 3 ? "#DC2626" : TEXT }}>{fmt(r.inlinks)}</span> },
     { key: "ext_refdomains", label: "Ref. Domains",   sortKey: "ext_refdomains", render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
+    { key: "ext_avg_dr",     label: "Avg DR",         sortKey: "ext_avg_dr",     render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     { key: "clicks",         label: "Clicks",         sortKey: "clicks",         render: r => fmt(r.clicks) },
     COVERAGE_COL,
   ],
@@ -1799,6 +1910,7 @@ const INSIGHT_COLUMNS = {
     { key: "clicks",         label: "Clicks",         sortKey: "clicks",         render: r => fmt(r.clicks) },
     { key: "inlinks",        label: "Internal Links", sortKey: "inlinks",        render: r => fmt(r.inlinks) },
     { key: "ext_refdomains", label: "Ref. Domains",   sortKey: "ext_refdomains", render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
+    { key: "ext_avg_dr",     label: "Avg DR",         sortKey: "ext_avg_dr",     render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     COVERAGE_COL,
   ],
   "intent-mismatch": [
@@ -1870,18 +1982,31 @@ const INSIGHT_COLUMNS = {
       const m = Math.floor(s / 60), sec = s % 60;
       return <span style={{ fontWeight: 700, color: "#7C3AED" }}>{m > 0 ? `${m}m ${sec}s` : `${sec}s`}</span>;
     }},
-    { key: "views",           label: "Views",       sortKey: "views",           render: r => fmt(r.views) },
-    { key: "impressions",     label: "Impressions", sortKey: "impressions",     render: r => fmt(r.impressions) },
-    { key: "engagement_rate", label: "Eng. Rate",   sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate) },
+    { key: "views",           label: "Views",        sortKey: "views",           render: r => fmt(r.views) },
+    { key: "impressions",     label: "Impressions",  sortKey: "impressions",     render: r => fmt(r.impressions) },
+    { key: "engagement_rate", label: "Eng. Rate",    sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate) },
+    { key: "ext_refdomains",  label: "Ref. Domains", sortKey: "ext_refdomains",  render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
+    { key: "ext_avg_dr",      label: "Avg DR",       sortKey: "ext_avg_dr",      render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     COVERAGE_COL,
   ],
   "content-freshness-risk": [
     URL_COL,
-    { key: "position",    label: "Pos",        sortKey: "position",    render: r => fmt(r.position, 1) },
-    { key: "impressions", label: "Impressions", sortKey: "impressions", render: r => fmt(r.impressions) },
-    { key: "word_count",  label: "Words",      sortKey: "word_count",  render: r => <span style={{ fontWeight: 700, color: (r.word_count || 0) < 300 ? "#DC2626" : "#F97316" }}>{fmt(r.word_count)}</span> },
-    { key: "clicks",      label: "Clicks",     sortKey: "clicks",      render: r => fmt(r.clicks) },
+    { key: "position",       label: "Pos",          sortKey: "position",       render: r => fmt(r.position, 1) },
+    { key: "impressions",    label: "Impressions",  sortKey: "impressions",    render: r => fmt(r.impressions) },
+    { key: "word_count",     label: "Words",        sortKey: "word_count",     render: r => <span style={{ fontWeight: 700, color: (r.word_count || 0) < 300 ? "#DC2626" : "#F97316" }}>{fmt(r.word_count)}</span> },
+    { key: "clicks",         label: "Clicks",       sortKey: "clicks",         render: r => fmt(r.clicks) },
+    { key: "ext_refdomains", label: "Ref. Domains", sortKey: "ext_refdomains", render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
+    { key: "ext_avg_dr",     label: "Avg DR",       sortKey: "ext_avg_dr",     render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     COVERAGE_COL,
+  ],
+  "broken-link-reclamation": [
+    { key: "Address",             label: "Broken URL",    maxWidth: 320, wrap: true,
+      render: r => <span style={{ fontSize: 11, color: "#DC2626", wordBreak: "break-all" }}>{r.Address?.replace(/^https?:\/\/[^/]+/, "") || r.Address}</span> },
+    { key: "incoming_refdomains", label: "Ref. Domains",  sortKey: "incoming_refdomains", render: r => <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.incoming_refdomains)}</span> },
+    { key: "avg_incoming_dr",     label: "Avg DR",        sortKey: "avg_incoming_dr",     render: r => <span style={{ fontWeight: 700, color: r.avg_incoming_dr >= 60 ? "#16A34A" : r.avg_incoming_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.avg_incoming_dr || "—"}</span> },
+    { key: "top_incoming_dr",     label: "Top DR",        sortKey: "top_incoming_dr",     render: r => <span style={{ fontWeight: 700, color: r.top_incoming_dr >= 60 ? "#16A34A" : r.top_incoming_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.top_incoming_dr || "—"}</span> },
+    { key: "dofollow_count",      label: "Dofollow",      sortKey: "dofollow_count",      render: r => fmt(r.dofollow_count) },
+    { key: "incoming_links",      label: "Total Links",   sortKey: "incoming_links",      render: r => fmt(r.incoming_links) },
   ],
 };
 
@@ -1889,7 +2014,7 @@ const INSIGHT_ORDER = [
   "full_funnel", "ctr_opportunity", "thin_traffic",
   "ranking_not_converting", "position_cliff", "orphan_pages",
   "engaged_no_convert", "impression_black_hole", "deep_no_traffic",
-  "ranking_velocity", "content_freshness_risk",
+  "ranking_velocity", "content_freshness_risk", "broken_link_reclamation",
   "intent_mismatch", "keyword_intent_gap", "query_expansion_gap",
   "segment_health",
 ];
@@ -1900,16 +2025,17 @@ const SLIM_FIELDS = {
   "ctr-opportunity":        ["Address", "data_coverage", "position", "impressions", "ctr", "ctr_benchmark", "ctr_gap"],
   "thin-traffic":           ["Address", "data_coverage", "clicks", "word_count", "position"],
   "ranking-not-converting": ["Address", "data_coverage", "clicks", "bounce_rate", "key_events", "position"],
-  "position-cliff":         ["Address", "data_coverage", "position", "impressions", "ctr", "ext_refdomains", "has_sf_issues"],
-  "orphan-pages":           ["Address", "data_coverage", "views", "inlinks", "ext_refdomains", "clicks"],
+  "position-cliff":         ["Address", "data_coverage", "position", "impressions", "ctr", "ext_refdomains", "ext_avg_dr", "has_sf_issues"],
+  "orphan-pages":           ["Address", "data_coverage", "views", "inlinks", "ext_refdomains", "ext_avg_dr", "clicks"],
   "engaged-no-convert":     ["Address", "data_coverage", "views", "avg_engagement_time", "engagement_rate", "key_events"],
   "impression-black-hole":  ["Address", "data_coverage", "impressions", "ctr", "position", "clicks"],
-  "deep-no-traffic":        ["Address", "data_coverage", "word_count", "impressions", "clicks", "inlinks", "ext_refdomains"],
+  "deep-no-traffic":        ["Address", "data_coverage", "word_count", "impressions", "clicks", "inlinks", "ext_refdomains", "ext_avg_dr"],
   "intent-mismatch":        ["Address", "data_coverage", "h1", "Title 1", "Meta Description 1", "sim_title_h1", "sim_title_meta", "sim_h1_meta", "alignment_score", "alignment_field_count", "position", "impressions"],
   "segment-health":           null,
   "full-funnel":              ["Address", "data_coverage", "page_score", "impressions", "clicks", "views", "key_events"],
-  "ranking-velocity":         ["Address", "data_coverage", "position", "avg_engagement_time", "views", "impressions", "engagement_rate"],
-  "content-freshness-risk":   ["Address", "data_coverage", "position", "impressions", "word_count", "clicks"],
+  "ranking-velocity":         ["Address", "data_coverage", "position", "avg_engagement_time", "views", "impressions", "engagement_rate", "ext_refdomains", "ext_avg_dr"],
+  "content-freshness-risk":   ["Address", "data_coverage", "position", "impressions", "word_count", "clicks", "ext_refdomains", "ext_avg_dr"],
+  "broken-link-reclamation":  null,
   "keyword-intent-gap":       null,
   "query-expansion-gap":      null,
 };
@@ -2101,7 +2227,7 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
             engaged_no_convert_flag: r.engaged_no_convert_flag,
             impression_black_hole_flag: r.impression_black_hole_flag,
             deep_no_traffic_flag: r.deep_no_traffic_flag,
-            ext_backlinks: r.ext_backlinks, ext_refdomains: r.ext_refdomains,
+            ext_backlinks: r.ext_backlinks, ext_refdomains: r.ext_refdomains, ext_avg_dr: r.ext_avg_dr,
             ext_orphan_flag: r.ext_orphan_flag,
             ranking_velocity_flag: r.ranking_velocity_flag,
             freshness_risk_flag: r.freshness_risk_flag,
@@ -2132,7 +2258,8 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
     if (cachedRows?.length) {
       // Fast path: re-segment in-memory rows — no re-upload needed, no loading flash
       try {
-        const result = reapplySegments(cachedRows, newRules, mergedMetaRef.current, gscQueriesRef.current || []);
+        const result = reapplySegments(cachedRows, newRules, mergedMetaRef.current, gscQueriesRef.current || [],
+          { broken_link_reclamation: report?.insights?.broken_link_reclamation });
         mergedRowsRef.current = result.merged_rows;
         setReport(prev => ({ ...prev, ...result }));
         onSave?.({ meta: result.meta, insights: slimForSave(result.insights), segmentRules: newRules, savedAt: new Date().toISOString() });
@@ -2366,12 +2493,14 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
                 const isQueryGap    = insight.id === "query-expansion-gap";
                 const isVelocity    = insight.id === "ranking-velocity";
                 const isFreshness   = insight.id === "content-freshness-risk";
+                const isBrokenReclaim = insight.id === "broken-link-reclamation";
                 return (
                   <InsightPanel
                     key={key}
                     insight={insight}
                     columns={(INSIGHT_COLUMNS[insight.id] || []).filter(col =>
-                      col.key !== "ext_refdomains" || (insight.pages || []).some(p => p.ext_refdomains > 0)
+                      (col.key !== "ext_refdomains" || (insight.pages || []).some(p => p.ext_refdomains > 0)) &&
+                      (col.key !== "ext_avg_dr"     || (insight.pages || []).some(p => p.ext_avg_dr     > 0))
                     )}
                     beforeTable={
                       isSegment   ? <SegmentDonutChart        segments={insight.pages} /> :
@@ -2385,8 +2514,9 @@ export default function CrossSignalReport({ sfRows, sfIssueRows, gscPages, gscQu
                       isFullFunnel? <FullFunnelChart          pages={insight.pages}    /> :
                       isIntentGap ? <IntentLandscapeChart     pages={insight.pages}    /> :
                       isQueryGap  ? <QueryGapChart            pages={insight.pages}    /> :
-                      isVelocity  ? <RankingVelocityChart     pages={insight.pages}    /> :
-                      isFreshness ? <FreshnessRiskChart       pages={insight.pages}    /> :
+                      isVelocity      ? <RankingVelocityChart          pages={insight.pages} /> :
+                      isFreshness     ? <FreshnessRiskChart             pages={insight.pages} /> :
+                      isBrokenReclaim ? <BrokenLinkReclamationChart     pages={insight.pages} /> :
                       undefined
                     }
                     headerAction={isSegment ? (
