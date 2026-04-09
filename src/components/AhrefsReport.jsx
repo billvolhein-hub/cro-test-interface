@@ -872,7 +872,7 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
             const backlinks = data?.backlinks?.backlinks ?? data?.backlinks?.all_backlinks ?? [];
             if (errors.backlinks && !backlinks.length) return <ErrBox msg={`Backlinks: ${errors.backlinks}`} />;
             if (!backlinks.length) return null;
-            const dofollow = backlinks.filter(b => b.dofollow).length;
+            const dofollow = backlinks.filter(b => b.is_dofollow).length;
             return (
               <>
                 <SectionHeader title="Top Backlinks" color={BLUE} />
@@ -893,13 +893,13 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     <tbody>
                       {backlinks.slice(0, 50).map((b, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, background: i % 2 ? BG : "transparent" }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.domain_from ?? b.url_from}</td>
-                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating ?? 0) }}>{b.domain_rating ?? "—"}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.name_source ?? b.url_from}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating_source ?? 0) }}>{b.domain_rating_source ?? "—"}</td>
                           <td style={{ padding: "6px 10px", color: MUTED, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.anchor}>{b.anchor || "(empty)"}</td>
                           <td style={{ padding: "6px 10px", color: BLUE, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_to}>{b.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/"}</td>
                           <td style={{ padding: "6px 10px" }}>
-                            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: b.dofollow ? "#F0FDF4" : "#F9FAFB", color: b.dofollow ? GREEN : MUTED, border: `1px solid ${b.dofollow ? "#BBF7D0" : BORDER}` }}>
-                              {b.dofollow ? "dofollow" : "nofollow"}
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: b.is_dofollow ? "#F0FDF4" : "#F9FAFB", color: b.is_dofollow ? GREEN : MUTED, border: `1px solid ${b.is_dofollow ? "#BBF7D0" : BORDER}` }}>
+                              {b.is_dofollow ? "dofollow" : "nofollow"}
                             </span>
                           </td>
                         </tr>
@@ -986,8 +986,8 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
                     <tbody>
                       {broken.slice(0, 50).map((b, i) => (
                         <tr key={i} style={{ borderBottom: `1px solid #FEE2E2`, background: i % 2 ? "#FFF5F5" : "transparent" }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.domain_from ?? b.url_from}</td>
-                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating ?? 0) }}>{b.domain_rating ?? "—"}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 600, color: TEXT, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_from}>{b.name_source ?? b.url_from}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: drColor(b.domain_rating_source ?? 0) }}>{b.domain_rating_source ?? "—"}</td>
                           <td style={{ padding: "6px 10px", color: MUTED, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.anchor || "(empty)"}</td>
                           <td style={{ padding: "6px 10px", color: RED, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={b.url_to}>{b.url_to?.replace(/^https?:\/\/[^/]+/, "") || "/"}</td>
                         </tr>

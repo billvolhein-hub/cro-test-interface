@@ -86,19 +86,18 @@ export async function getTopBacklinks(target) {
   return ahrefs("all-backlinks", {
     target:   stripProtocol(target),
     mode:     "domain",
-    select:   "url_from,url_to,domain_from,domain_rating,dofollow,anchor",
+    select:   "url_from,url_to,name_source,domain_rating_source,is_dofollow,anchor",
     limit:    "1000",
-    order_by: "domain_rating:desc",
+    order_by: "domain_rating_source:desc",
   });
 }
 
 export async function getBestByLinks(target) {
-  return ahrefs("best-by-links", {
-    target:   stripProtocol(target),
-    mode:     "domain",
-    select:   "url,title,refdomains,backlinks,first_seen",
-    limit:    "100",
-    order_by: "refdomains:desc",
+  return ahrefs("best-by-external-links", {
+    target: stripProtocol(target),
+    mode:   "domain",
+    select: "url,title,refdomains,backlinks",
+    limit:  "100",
   });
 }
 
@@ -106,9 +105,9 @@ export async function getBrokenBacklinks(target) {
   return ahrefs("broken-backlinks", {
     target:   stripProtocol(target),
     mode:     "domain",
-    select:   "url_from,url_to,domain_from,domain_rating,dofollow,anchor",
+    select:   "url_from,url_to,name_source,domain_rating_source,is_dofollow,anchor",
     limit:    "500",
-    order_by: "domain_rating:desc",
+    order_by: "domain_rating_source:desc",
   });
 }
 
