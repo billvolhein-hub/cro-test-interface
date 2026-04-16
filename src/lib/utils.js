@@ -226,8 +226,6 @@ export const makePdfFromSvg = async (svgString, filename) => {
 
 // ── AI hypothesis generation ────────────────────────────────────────────────
 export async function generateHypothesis(statement, context = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("VITE_ANTHROPIC_API_KEY is not set in your .env file.");
 
   const contextLines = [
     context.testName   && `Test name: ${context.testName}`,
@@ -254,14 +252,9 @@ Rules:
 - Be specific and concise — each field should be 1–2 sentences
 - Use present tense`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
@@ -283,8 +276,6 @@ Rules:
 }
 
 export async function generateFindings(results, testContext = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("VITE_ANTHROPIC_API_KEY is not set in your .env file.");
 
   const goalLines = results.goals.map(goal => {
     const control = goal.rows.find(r => r.variant === results.variantOrder[0]);
@@ -320,14 +311,9 @@ Rules:
 - Do not use the word "significant" unless confidence is ≥95%
 - Return ONLY the HTML, no markdown fences, no commentary`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json",
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,

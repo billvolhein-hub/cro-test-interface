@@ -33,6 +33,25 @@ function shortUrl(url) {
   } catch { return url; }
 }
 
+// ── CSV export ────────────────────────────────────────────────────────────────
+function downloadCSV(rows, columns, filename) {
+  const escape = v => {
+    if (v == null) return "";
+    const s = String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const header = columns.map(c => escape(c.label)).join(",");
+  const body   = rows.map(row =>
+    columns.map(c => escape(c.csvValue ? c.csvValue(row) : (row[c.key] ?? ""))).join(",")
+  );
+  const blob = new Blob([[header, ...body].join("\n")], { type: "text/csv" });
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 // ── Coverage badge ────────────────────────────────────────────────────────────
 function CoverageBadge({ coverage }) {
   const c = COVERAGE[coverage] || COVERAGE["sf-only"];
@@ -97,6 +116,15 @@ function InsightPanel({ insight, columns, headerAction, bodyPrefix, beforeTable 
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {headerAction && <div onClick={e => e.stopPropagation()}>{headerAction}</div>}
+          {pages.length > 0 && (
+            <button
+              onClick={e => { e.stopPropagation(); downloadCSV(pages, columns, `${insight.id}.csv`); }}
+              title="Export to CSV"
+              style={{ fontSize: 10, fontWeight: 700, color: MUTED, background: "none", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "'Inter',sans-serif", lineHeight: 1.6 }}
+            >
+              ↓ CSV
+            </button>
+          )}
           <span style={{ fontSize: 12, color: MUTED, display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</span>
         </div>
       </div>
@@ -1844,9 +1872,9 @@ const INSIGHT_COLUMNS = {
     URL_COL,
     { key: "position",      label: "Pos",        sortKey: "position",      render: r => fmt(r.position, 1) },
     { key: "impressions",   label: "Impressions", sortKey: "impressions",   render: r => fmt(r.impressions) },
-    { key: "ctr",           label: "Actual CTR",  sortKey: "ctr",           render: r => fmtPct(r.ctr) },
-    { key: "ctr_benchmark", label: "Benchmark",                             render: r => fmtPct(r.ctr_benchmark) },
-    { key: "ctr_gap",       label: "Gap",         sortKey: "ctr_gap",       render: r => <span style={{ color: "#DC2626", fontWeight: 700 }}>+{fmtPct(r.ctr_gap)}</span> },
+    { key: "ctr",           label: "Actual CTR",  sortKey: "ctr",           render: r => fmtPct(r.ctr),           csvValue: r => r.ctr != null ? (r.ctr * 100).toFixed(2) + "%" : "" },
+    { key: "ctr_benchmark", label: "Benchmark",                             render: r => fmtPct(r.ctr_benchmark), csvValue: r => r.ctr_benchmark != null ? (r.ctr_benchmark * 100).toFixed(2) + "%" : "" },
+    { key: "ctr_gap",       label: "Gap",         sortKey: "ctr_gap",       render: r => <span style={{ color: "#DC2626", fontWeight: 700 }}>+{fmtPct(r.ctr_gap)}</span>, csvValue: r => r.ctr_gap != null ? (r.ctr_gap * 100).toFixed(2) + "%" : "" },
     COVERAGE_COL,
   ],
   "thin-traffic": [
@@ -1859,7 +1887,7 @@ const INSIGHT_COLUMNS = {
   "ranking-not-converting": [
     URL_COL,
     { key: "clicks",      label: "Clicks",     sortKey: "clicks",      render: r => fmt(r.clicks) },
-    { key: "bounce_rate", label: "Bounce",      sortKey: "bounce_rate", render: r => <span style={{ color: "#DC2626" }}>{fmtPct(r.bounce_rate)}</span> },
+    { key: "bounce_rate", label: "Bounce",      sortKey: "bounce_rate", render: r => <span style={{ color: "#DC2626" }}>{fmtPct(r.bounce_rate)}</span>, csvValue: r => r.bounce_rate != null ? (r.bounce_rate * 100).toFixed(1) + "%" : "" },
     { key: "key_events",  label: "Key Events",  sortKey: "key_events",  render: r => fmt(r.key_events) },
     { key: "position",    label: "Pos",         sortKey: "position",    render: r => fmt(r.position, 1) },
     COVERAGE_COL,
@@ -1886,12 +1914,12 @@ const INSIGHT_COLUMNS = {
   "engaged-no-convert": [
     URL_COL,
     { key: "views",               label: "Views",         sortKey: "views",               render: r => fmt(r.views) },
-    { key: "avg_engagement_time", label: "Avg Eng. Time", sortKey: "avg_engagement_time", render: r => {
+    { key: "avg_engagement_time", label: "Avg Eng. Time (s)", sortKey: "avg_engagement_time", render: r => {
       const s = Math.round(r.avg_engagement_time || 0);
       const m = Math.floor(s / 60), sec = s % 60;
       return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-    }},
-    { key: "engagement_rate", label: "Eng. Rate", sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate) },
+    }, csvValue: r => Math.round(r.avg_engagement_time || 0) },
+    { key: "engagement_rate", label: "Eng. Rate", sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate), csvValue: r => r.engagement_rate != null ? (r.engagement_rate * 100).toFixed(1) + "%" : "" },
     { key: "key_events",      label: "Key Events", sortKey: "key_events",     render: r => <span style={{ color: "#DC2626", fontWeight: 700 }}>{fmt(r.key_events)}</span> },
     COVERAGE_COL,
   ],
@@ -1924,7 +1952,7 @@ const INSIGHT_COLUMNS = {
       const pct = Math.round(r.alignment_score * 100);
       const color = pct < 15 ? "#EF4444" : pct < 30 ? "#F59E0B" : "#22C55E";
       return <span style={{ color, fontWeight: 700 }}>{pct}%</span>;
-    }},
+    }, csvValue: r => r.alignment_score != null ? Math.round(r.alignment_score * 100) + "%" : "" },
     { key: "position", label: "Rank", sortKey: "position", render: r => r.position > 0 ? r.position.toFixed(1) : "—" },
   ],
   "keyword-intent-gap": [
@@ -1954,15 +1982,15 @@ const INSIGHT_COLUMNS = {
     { key: "page_count",          label: "Pages",          sortKey: "page_count",          render: r => fmt(r.page_count) },
     { key: "avg_position",        label: "Avg Pos",        sortKey: "avg_position",        render: r => r.avg_position ? fmt(r.avg_position, 1) : "—" },
     { key: "total_views",         label: "Views",          sortKey: "total_views",         render: r => fmt(r.total_views) },
-    { key: "avg_engagement_time", label: "Avg Eng. Time",  sortKey: "avg_engagement_time", render: r => {
+    { key: "avg_engagement_time", label: "Avg Eng. Time (s)", sortKey: "avg_engagement_time", render: r => {
         if (r.avg_engagement_time == null) return "—";
         const s = Math.round(r.avg_engagement_time);
         const m = Math.floor(s / 60);
         const sec = s % 60;
         return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-      }},
+      }, csvValue: r => r.avg_engagement_time != null ? Math.round(r.avg_engagement_time) : "" },
     { key: "total_key_events",    label: "Key Events",     sortKey: "total_key_events",    render: r => fmt(r.total_key_events) },
-    { key: "avg_page_score",    label: "Page Score",   sortKey: "avg_page_score",    render: r => <span style={{ fontWeight: 700, color: r.avg_page_score < 30 ? "#DC2626" : r.avg_page_score < 60 ? "#D97706" : "#16A34A" }}>{fmt(r.avg_page_score, 0)}</span> },
+    { key: "avg_page_score",      label: "Page Score",     sortKey: "avg_page_score",      render: r => <span style={{ fontWeight: 700, color: r.avg_page_score < 30 ? "#DC2626" : r.avg_page_score < 60 ? "#D97706" : "#16A34A" }}>{fmt(r.avg_page_score, 0)}</span> },
     { key: "sf_issue_pages",      label: "SF Issues",      sortKey: "sf_issue_pages",      render: r => fmt(r.sf_issue_pages) },
   ],
   "full-funnel": [
@@ -1977,14 +2005,14 @@ const INSIGHT_COLUMNS = {
   "ranking-velocity": [
     URL_COL,
     { key: "position",            label: "Pos",          sortKey: "position",            render: r => fmt(r.position, 1) },
-    { key: "avg_engagement_time", label: "Avg Eng. Time", sortKey: "avg_engagement_time", render: r => {
+    { key: "avg_engagement_time", label: "Avg Eng. Time (s)", sortKey: "avg_engagement_time", render: r => {
       const s = Math.round(r.avg_engagement_time || 0);
       const m = Math.floor(s / 60), sec = s % 60;
       return <span style={{ fontWeight: 700, color: "#7C3AED" }}>{m > 0 ? `${m}m ${sec}s` : `${sec}s`}</span>;
-    }},
+    }, csvValue: r => Math.round(r.avg_engagement_time || 0) },
     { key: "views",           label: "Views",        sortKey: "views",           render: r => fmt(r.views) },
     { key: "impressions",     label: "Impressions",  sortKey: "impressions",     render: r => fmt(r.impressions) },
-    { key: "engagement_rate", label: "Eng. Rate",    sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate) },
+    { key: "engagement_rate", label: "Eng. Rate",    sortKey: "engagement_rate", render: r => fmtPct(r.engagement_rate), csvValue: r => r.engagement_rate != null ? (r.engagement_rate * 100).toFixed(1) + "%" : "" },
     { key: "ext_refdomains",  label: "Ref. Domains", sortKey: "ext_refdomains",  render: r => r.ext_refdomains > 0 ? <span style={{ fontWeight: 700, color: "#7C3AED" }}>{fmt(r.ext_refdomains)}</span> : "—" },
     { key: "ext_avg_dr",      label: "Avg DR",       sortKey: "ext_avg_dr",      render: r => r.ext_avg_dr > 0 ? <span style={{ fontWeight: 700, color: r.ext_avg_dr >= 60 ? "#16A34A" : r.ext_avg_dr >= 40 ? "#D97706" : "#6B7280" }}>{r.ext_avg_dr}</span> : "—" },
     COVERAGE_COL,

@@ -6,6 +6,7 @@ export const config = { maxDuration: 45 };
 
 export default async function handler(req, res) {
   const url = req.query?.url;
+  const ua  = req.query?.ua;
   if (!url) {
     res.status(400).json({ error: "url parameter required" });
     return;
@@ -21,6 +22,7 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
+    if (ua) await page.setUserAgent(ua);
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 

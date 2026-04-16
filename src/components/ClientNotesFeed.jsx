@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fmtDate, toSlug } from "../lib/utils";
 import { usePortal } from "../context/PortalContext";
+import { useAgencyPath } from "../context/AgencyContext";
 import { BORDER, CARD, MUTED, TEXT, ACCENT, TEAL } from "../lib/constants";
 
 const NOTE_COLOR  = "#7C3AED";
@@ -36,8 +37,9 @@ function timeAgo(ts) {
 }
 
 export default function ClientNotesFeed({ tests, clients, clientId, collapsed, onToggle, onUpdateTest }) {
-  const navigate  = useNavigate();
+  const navigate    = useNavigate();
   const { isPortal } = usePortal();
+  const ap = useAgencyPath();
   const [showResolved, setShowResolved] = useState(false);
 
   const allNotes      = collectClientNotes(tests, clientId);
@@ -100,7 +102,7 @@ export default function ClientNotesFeed({ tests, clients, clientId, collapsed, o
                 const client = clients?.find(c => c.id === test.clientId);
                 const testUrl = isPortal
                   ? `/portal/${client?.portalToken}/tests/${toSlug(test.testName)}?template=1`
-                  : `/tests/${test.id}?template=1`;
+                  : ap(`/tests/${test.id}?template=1`);
                 const isResolved = !!overlay.resolved;
                 return (
                   <div

@@ -30,10 +30,10 @@ async function convertCall(appId, appSecret, url, method = "GET", body = null) {
 }
 
 export default async function handler(req, res) {
-  const appId     = process.env.VITE_CONVERT_API_KEY;
-  const appSecret = process.env.VITE_CONVERT_API_SECRET;
-  const accountId = process.env.VITE_CONVERT_ACCOUNT_ID;
-  const projectId = process.env.VITE_CONVERT_PROJECT_ID;
+  const appId     = process.env.CONVERT_API_KEY;
+  const appSecret = process.env.CONVERT_API_SECRET;
+  const accountId = process.env.CONVERT_ACCOUNT_ID;
+  const projectId = process.env.CONVERT_PROJECT_ID;
 
   if (!appId || !appSecret || !accountId || !projectId) {
     return res.status(500).json({ error: "Missing Convert env vars on server" });

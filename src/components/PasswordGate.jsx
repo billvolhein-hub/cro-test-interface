@@ -9,8 +9,7 @@ import { fetchPlatformConfig } from "../lib/agencies";
 const SUPER_KEY = "me_superadmin_auth";
 
 export function SuperAdminGate({ children }) {
-  const envPw = import.meta.env.VITE_SUPER_ADMIN_PASSWORD ?? "";
-  const [pw,      setPw]      = useState(envPw);
+  const [pw,      setPw]      = useState("");
   const [loading, setLoading] = useState(true);
   const [authed,  setAuthed]  = useState(false);
   const [input,   setInput]   = useState("");
@@ -18,18 +17,13 @@ export function SuperAdminGate({ children }) {
 
   useEffect(() => {
     fetchPlatformConfig().then(cfg => {
-      const dbPw = cfg.super_admin_password ?? "";
-      const resolved = dbPw || envPw;
+      const resolved = cfg.super_admin_password ?? "";
       setPw(resolved);
       const stored = localStorage.getItem(SUPER_KEY);
       if (!resolved || stored === resolved) setAuthed(true);
       setLoading(false);
     }).catch(() => {
-      // DB not set up yet — fall back to env var
-      const resolved = envPw;
-      setPw(resolved);
-      const stored = localStorage.getItem(SUPER_KEY);
-      if (!resolved || stored === resolved) setAuthed(true);
+      // DB not reachable — deny access rather than expose a fallback
       setLoading(false);
     });
   }, []);
@@ -113,48 +107,6 @@ export function AgencyGate({ agency, children }) {
             </div>
           )
       }
-      input={input} setInput={setInput} error={error} setError={setError} onSubmit={attempt}
-    />
-  );
-}
-
-// ── Admin Gate (legacy — kept for portal route compatibility) ─────────────────
-const ADMIN_PW  = import.meta.env.VITE_ADMIN_PASSWORD ?? "";
-const ADMIN_KEY = "me_admin_auth";
-
-export function AdminGate({ children }) {
-  const [authed, setAuthed] = useState(() =>
-    !ADMIN_PW || localStorage.getItem(ADMIN_KEY) === ADMIN_PW
-  );
-  const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
-
-  if (authed) return children;
-
-  const attempt = () => {
-    if (input === ADMIN_PW) {
-      localStorage.setItem(ADMIN_KEY, ADMIN_PW);
-      setAuthed(true);
-    } else {
-      setError(true);
-      setInput("");
-    }
-  };
-
-  return (
-    <GateScreen
-      title={<span style={{ color: TEXT }}>MetricsEdge</span>}
-      logo={
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20, gap: 6 }}>
-          <svg width="52" height="52" viewBox="0 0 36 36" fill="none">
-            <rect x="2"  y="10" width="8" height="22" rx="2" fill="#C9A84C"/>
-            <rect x="14" y="5"  width="8" height="27" rx="2" fill="#2A8C8C"/>
-            <rect x="26" y="1"  width="8" height="31" rx="2" fill="#1B3A6B"/>
-          </svg>
-          <div style={{ fontSize: 9, fontWeight: 700, color: MUTED, letterSpacing: 2, textTransform: "uppercase" }}>Client Headquarters</div>
-        </div>
-      }
-      subtitle="Enter your admin password to continue"
       input={input} setInput={setInput} error={error} setError={setError} onSubmit={attempt}
     />
   );

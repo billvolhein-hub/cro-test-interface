@@ -525,6 +525,32 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
           <span style={{ fontSize: 12, color: DIM, fontWeight: 500, padding: "4px 0" }}>Updated {fmtDate(test.updatedAt)}</span>
         </div>
 
+        {/* AI Prediction banner */}
+        {test.results?.aiPrediction && (() => {
+          const { probability, evidence, lever, principle } = test.results.aiPrediction;
+          const color = probability >= 70 ? "#15803D" : probability >= 50 ? "#B45309" : "#DC2626";
+          const bg    = probability >= 70 ? "#F0FDF4" : probability >= 50 ? "#FFFBEB" : "#FEF2F2";
+          const border = probability >= 70 ? "#BBF7D0" : probability >= 50 ? "#FDE68A" : "#FECACA";
+          return (
+            <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: "14px 18px", marginBottom: 24, display: "flex", gap: 14, alignItems: "flex-start" }}>
+              <div style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>✨</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: evidence ? 6 : 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color }}>
+                    {probability}% Predicted Success
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 4, padding: "2px 7px" }}>
+                    Claude AI
+                  </span>
+                  {lever && <span style={{ fontSize: 11, color: MUTED }}>Lever {lever}</span>}
+                  {principle && <span style={{ fontSize: 11, color: MUTED }}>· {principle}</span>}
+                </div>
+                {evidence && <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.55 }}>{evidence}</div>}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Action row */}
         <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
           <button

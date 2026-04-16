@@ -4,7 +4,7 @@ import { fetchAgencyBySlug, updateAgency } from "../lib/agencies";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "../db";
 import {
   fetchClients, fetchTests,
-  createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, deleteClient, regeneratePortalToken, updateClientPortalPassword,
+  createClient, createClients, updateClient, updateClientBrand, updateClientCrawlReport, updateClientCustomUA, deleteClient, regeneratePortalToken, updateClientPortalPassword, normalizeCrawlReports,
   createTest, createTests, updateTestField, replaceTest, deleteTest,
 } from "../lib/api";
 import { AgencyContext } from "../context/AgencyContext";
@@ -105,9 +105,23 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
     await updateClientBrand(id, brand);
   };
 
-  const onSaveCrawlReport = async (id, crawlReport) => {
-    setClients(prev => prev.map(c => c.id === id ? { ...c, crawlReport } : c));
-    await updateClientCrawlReport(id, crawlReport);
+  const onUpdateClientCustomUA = async (id, customUA) => {
+    const client = clients.find(c => c.id === id);
+    setClients(prev => prev.map(c => c.id === id ? { ...c, customUA: customUA || null } : c));
+    await updateClientCustomUA(id, customUA, client?.brand ?? {});
+  };
+
+  const onSaveCrawlReport = async (id, crawlReports) => {
+    // crawlReports is always the full domain-keyed map
+    const normalized = normalizeCrawlReports(crawlReports);
+    const domains    = Object.keys(normalized);
+    setClients(prev => prev.map(c => c.id !== id ? c : {
+      ...c,
+      crawlReports: normalized,
+      domains,
+      crawlReport: normalized[domains[0]] ?? null,
+    }));
+    await updateClientCrawlReport(id, normalized);
   };
 
   const onRegeneratePortalToken = (id, portalToken) => {
@@ -206,7 +220,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
               tests={tests}
               onCreateTest={onCreateTest} onCreateTests={onCreateTests} onDeleteTest={onDeleteTest} onUpdateTest={onUpdateTest}
               clients={clients}
-              onCreateClient={onCreateClient} onCreateClients={onCreateClients} onUpdateClient={onUpdateClient} onDeleteClient={onDeleteClient}
+              onCreateClient={onCreateClient} onCreateClients={onCreateClients} onUpdateClient={onUpdateClient} onUpdateClientCustomUA={onUpdateClientCustomUA} onSaveCrawlReport={onSaveCrawlReport} onDeleteClient={onDeleteClient}
               onSaveScreenshot={onSaveScreenshot} onSaveScreenshots={onSaveScreenshots}
             />
           }

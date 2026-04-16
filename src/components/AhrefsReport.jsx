@@ -585,7 +585,6 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
     const target = (overrideDomain || domain).trim();
     if (!target) return;
     setLoading(true);
-    setData(null);
     setErrors({});
 
     const safe = async (key, fn) => {
@@ -615,10 +614,10 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       if (k.startsWith("_err_")) errs[k.replace("_err_", "")] = v;
       else d[k] = v;
     }
-    setData(d);
+    setData(prev => ({ ...(prev || {}), ...d }));
     setErrors(errs);
     setLoading(false);
-    onSaveRef.current?.({ data: d, errors: errs, domain: target, fetchedAt: new Date().toISOString() });
+    onSaveRef.current?.({ data: { ...(data || {}), ...d }, errors: errs, domain: target, fetchedAt: new Date().toISOString() });
     onFetchComplete?.();
   };
 
@@ -723,6 +722,17 @@ const AhrefsReport = forwardRef(function AhrefsReport({ defaultDomain, onFetchCo
       {loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Skeleton h={60} /><Skeleton h={140} /><Skeleton h={100} /><Skeleton h={120} />
+        </div>
+      )}
+
+      {data && !loading && Object.keys(errors).length > 0 && (
+        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 7, padding: "10px 14px", fontSize: 11, color: "#92400E", marginBottom: 12, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 14, flexShrink: 0 }}>⚠</span>
+          <div>
+            <strong>Some sections couldn't refresh</strong> — showing last saved results.
+            {" "}<span style={{ color: "#B45309" }}>Failed: {Object.keys(errors).join(", ")}.</span>
+            {" "}This usually means the Ahrefs API unit limit has been reached for the month.
+          </div>
         </div>
       )}
 

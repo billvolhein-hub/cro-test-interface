@@ -61,6 +61,11 @@ export async function updateClientPortalPassword(id, password) {
   await db({ table: "clients", action: "update", data: { portal_password: password || null }, filters: { id } });
 }
 
+export async function updateClientCustomUA(id, customUA, currentBrand = {}) {
+  const brand = { ...currentBrand, custom_ua: customUA?.trim() || null };
+  await db({ table: "clients", action: "update", data: { brand }, filters: { id } });
+}
+
 export async function regeneratePortalToken(id) {
   const data = await db({
     table: "clients",
@@ -73,14 +78,36 @@ export async function regeneratePortalToken(id) {
   return data.portal_token;
 }
 
+// Normalize crawl_report to a domain-keyed map.
+// Old format: { domain: "x.com", internal: {...}, ... }
+// New format: { "x.com": { domain: "x.com", internal: {...}, ... }, "y.com": {...} }
+export function normalizeCrawlReports(raw) {
+  if (!raw) return {};
+  if (typeof raw.domain === "string" && raw.domain) {
+    // Old single-domain format — migrate transparently
+    return { [raw.domain]: raw };
+  }
+  // New format — filter to object values only (safety)
+  const result = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) result[k] = v;
+  }
+  return result;
+}
+
 function rowToClient(row) {
+  const crawlReports = normalizeCrawlReports(row.crawl_report);
+  const domains      = Object.keys(crawlReports);
   return {
     id:             row.id,
     name:           row.name,
     createdAt:      row.created_at,
     agencyId:       row.agency_id ?? null,
     brand:          row.brand ?? {},
-    crawlReport:    row.crawl_report ?? null,
+    customUA:       row.brand?.custom_ua ?? null,
+    crawlReports,                                    // domain-keyed map (new)
+    domains,                                         // ["example.com", "other.com"]
+    crawlReport:    crawlReports[domains[0]] ?? null, // first domain, legacy compat
     portalToken:    row.portal_token ?? null,
     portalPassword: row.portal_password ?? null,
   };

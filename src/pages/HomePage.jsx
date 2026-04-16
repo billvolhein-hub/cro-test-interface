@@ -23,7 +23,7 @@ function fmtK(n) {
   return String(n);
 }
 
-export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
+export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreateTests, onDeleteTest, onUpdateTest, clients, onCreateClient, onCreateClients, onUpdateClient, onUpdateClientCustomUA, onSaveCrawlReport, onDeleteClient, onSaveScreenshot, onSaveScreenshots }) {
   const navigate = useNavigate();
   const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile } = useBreakpoint();
@@ -44,33 +44,36 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
   const liveTests = tests.filter(t => t.status === "Test Running");
 
   // ── SEO derived data ──────────────────────────────────────────────────────
-  const clientsWithSEO = clients.filter(c => c.crawlReport?.domain || c.crawlReport?.ahrefs);
-  const clientsWithIssues = clients.filter(c => c.crawlReport?.issues?.byPrioritySorted?.length > 0);
+  // Flatten all domain reports across all clients for aggregate calculations
+  const allDomainReports = clients.flatMap(c => Object.values(c.crawlReports ?? {}));
 
-  // Aggregate issue counts across all clients
-  const totalHighIssues = clients.reduce((sum, c) => sum + (c.crawlReport?.issues?.byPriority?.High ?? 0), 0);
-  const totalMedIssues  = clients.reduce((sum, c) => sum + (c.crawlReport?.issues?.byPriority?.Medium ?? 0), 0);
+  const clientsWithSEO = clients.filter(c => (c.domains?.length ?? 0) > 0);
+  const clientsWithIssues = clients.filter(c =>
+    Object.values(c.crawlReports ?? {}).some(r => r?.issues?.byPrioritySorted?.length > 0)
+  );
 
-  // Aggregate pages crawled (from internal stats or nodes array)
-  const totalPages = clients.reduce((sum, c) => {
-    const r = c.crawlReport;
-    return sum + (r?.internal?.htmlPages ?? r?.nodes?.length ?? 0);
-  }, 0);
+  // Aggregate issue counts across all domains across all clients
+  const totalHighIssues = allDomainReports.reduce((sum, r) => sum + (r?.issues?.byPriority?.High ?? 0), 0);
+  const totalMedIssues  = allDomainReports.reduce((sum, r) => sum + (r?.issues?.byPriority?.Medium ?? 0), 0);
 
-  // Average DR across clients that have it
-  const drClients = clients.filter(c => c.crawlReport?.ahrefs?.data?.dr?.domain_rating != null);
-  const avgDR = drClients.length
-    ? Math.round(drClients.reduce((s, c) => s + c.crawlReport.ahrefs.data.dr.domain_rating, 0) / drClients.length)
+  // Aggregate pages crawled across all domains
+  const totalPages = allDomainReports.reduce((sum, r) =>
+    sum + (r?.internal?.htmlPages ?? r?.nodes?.length ?? 0), 0);
+
+  // Average DR across all domains that have it
+  const drReports = allDomainReports.filter(r => r?.ahrefs?.data?.dr?.domain_rating != null);
+  const avgDR = drReports.length
+    ? Math.round(drReports.reduce((s, r) => s + r.ahrefs.data.dr.domain_rating, 0) / drReports.length)
     : null;
 
-  // Total live backlinks across all clients
-  const totalBacklinks = clients.reduce((sum, c) => sum + (c.crawlReport?.ahrefs?.data?.metrics?.live ?? 0), 0);
-  const totalRefDomains = clients.reduce((sum, c) => sum + (c.crawlReport?.ahrefs?.data?.metrics?.live_refdomains ?? 0), 0);
+  // Total live backlinks across all domains
+  const totalBacklinks  = allDomainReports.reduce((sum, r) => sum + (r?.ahrefs?.data?.metrics?.live ?? 0), 0);
+  const totalRefDomains = allDomainReports.reduce((sum, r) => sum + (r?.ahrefs?.data?.metrics?.live_refdomains ?? 0), 0);
 
   // Per-client SEO rows (all clients, sorted: with data first)
   const seoRows = [...clients].sort((a, b) => {
-    const aHas = !!(a.crawlReport?.domain || a.crawlReport?.ahrefs);
-    const bHas = !!(b.crawlReport?.domain || b.crawlReport?.ahrefs);
+    const aHas = (a.domains?.length ?? 0) > 0;
+    const bHas = (b.domains?.length ?? 0) > 0;
     return Number(bHas) - Number(aHas);
   });
   const SEO_PREVIEW = 4;
@@ -252,7 +255,7 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
                 <div style={{ fontSize: 28, fontWeight: 800, color: avgDR != null ? drColor(avgDR).color : MUTED, lineHeight: 1 }}>
                   {avgDR != null ? avgDR : "—"}
                 </div>
-                {drClients.length > 0 && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>across {drClients.length} client{drClients.length !== 1 ? "s" : ""}</div>}
+                {drReports.length > 0 && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>across {drReports.length} domain{drReports.length !== 1 ? "s" : ""}</div>}
               </div>
 
               {/* Total backlinks */}
@@ -282,22 +285,31 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
             <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {visibleRows.map(c => {
-                  const r   = c.crawlReport ?? {};
-                  const ahrefs = r.ahrefs?.data ?? null;
-                  const dr  = ahrefs?.dr?.domain_rating;
-                  const bl  = ahrefs?.metrics?.live;
-                  const rd  = ahrefs?.metrics?.live_refdomains;
-                  const hi  = r.issues?.byPriority?.High ?? 0;
-                  const med = r.issues?.byPriority?.Medium ?? 0;
-                  const lo  = r.issues?.byPriority?.Low ?? 0;
-                  const pages = r.internal?.htmlPages ?? r.nodes?.length ?? 0;
-                  const avgRt = r.internal?.avgRt;
-                  const indexable = r.internal?.indexable;
-                  const thin = r.internal?.wordCount?.["Thin (<300)"] ?? 0;
-                  const hasData = !!(r.domain || r.ahrefs);
+                  // Aggregate across all domains for this client
+                  const domainReports = Object.values(c.crawlReports ?? {});
+                  const r = c.crawlReport ?? {};  // primary domain (legacy compat for display)
+                  const hasData = (c.domains?.length ?? 0) > 0;
 
-                  // Top high-priority issue
-                  const topIssue = r.issues?.byPrioritySorted?.find(i => i.priority === "High");
+                  // Aggregate Ahrefs across all domains (sum backlinks, avg DR)
+                  const drVals = domainReports.map(d => d?.ahrefs?.data?.dr?.domain_rating).filter(v => v != null);
+                  const dr  = drVals.length ? Math.round(drVals.reduce((a, b) => a + b, 0) / drVals.length) : null;
+                  const bl  = domainReports.reduce((s, d) => s + (d?.ahrefs?.data?.metrics?.live ?? 0), 0) || null;
+                  const rd  = domainReports.reduce((s, d) => s + (d?.ahrefs?.data?.metrics?.live_refdomains ?? 0), 0) || null;
+
+                  // Aggregate issues
+                  const hi  = domainReports.reduce((s, d) => s + (d?.issues?.byPriority?.High ?? 0), 0);
+                  const med = domainReports.reduce((s, d) => s + (d?.issues?.byPriority?.Medium ?? 0), 0);
+                  const lo  = domainReports.reduce((s, d) => s + (d?.issues?.byPriority?.Low ?? 0), 0);
+
+                  // Aggregate crawl
+                  const totalCrawled = domainReports.reduce((s, d) => s + (d?.internal?.totalCrawled ?? d?.nodes?.length ?? 0), 0);
+                  const htmlPages    = domainReports.reduce((s, d) => s + (d?.internal?.htmlPages ?? 0), 0);
+                  const thin         = domainReports.reduce((s, d) => s + (d?.internal?.wordCount?.["Thin (<300)"] ?? 0), 0);
+                  const rtVals = domainReports.map(d => d?.internal?.avgRt).filter(v => v && v !== "—").map(Number).filter(v => !isNaN(v));
+                  const avgRt = rtVals.length ? (rtVals.reduce((a, b) => a + b, 0) / rtVals.length).toFixed(2) : null;
+
+                  // Top high-priority issue across all domains
+                  const topIssue = domainReports.flatMap(d => d?.issues?.byPrioritySorted ?? []).find(i => i.priority === "High");
 
                   return (
                     <div key={c.id}
@@ -308,11 +320,13 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
 
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" }}>
 
-                        {/* Client name + domain */}
+                        {/* Client name + domains */}
                         <div style={{ minWidth: isMobile ? "100%" : 160, flex: isMobile ? "none" : "0 0 160px" }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{c.name}</div>
-                          {r.domain
-                            ? <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{r.domain}</div>
+                          {(c.domains?.length ?? 0) > 0
+                            ? <div style={{ fontSize: 11, color: MUTED, marginTop: 3, display: "flex", flexDirection: "column", gap: 1 }}>
+                                {(c.domains ?? []).map(d => <span key={d}>{d}</span>)}
+                              </div>
                             : <div style={{ fontSize: 11, color: "#9CA3AF", fontStyle: "italic", marginTop: 2 }}>No report</div>}
                         </div>
 
@@ -334,22 +348,24 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
 
                           {/* Backlinks row */}
                           {(bl != null || rd != null) && (
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 4, padding: "2px 8px" }}>
-                                🔗 {fmtK(bl)} links
-                              </span>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 4, padding: "2px 8px" }}>
-                                {fmtK(rd)} domains
-                              </span>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Backlinks</span>
+                              {bl != null && <span style={{ fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 4, padding: "2px 8px" }}>
+                                🔗 {fmtK(bl)} total backlinks
+                              </span>}
+                              {rd != null && <span style={{ fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 4, padding: "2px 8px" }}>
+                                {fmtK(rd)} referring domains
+                              </span>}
                             </div>
                           )}
 
                           {/* Issues row */}
                           {(hi > 0 || med > 0 || lo > 0) && (
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                              {hi > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, padding: "2px 8px" }}>🔴 {hi} High</span>}
-                              {med > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#B45309", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 4, padding: "2px 8px" }}>⚠️ {med} Med</span>}
-                              {lo > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 4, padding: "2px 8px" }}>{lo} Low</span>}
+                              <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>SEO Issues</span>
+                              {hi > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 4, padding: "2px 8px" }}>🔴 {hi} critical</span>}
+                              {med > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#B45309", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 4, padding: "2px 8px" }}>⚠️ {med} warnings</span>}
+                              {lo > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 4, padding: "2px 8px" }}>{lo} notices</span>}
                               {topIssue && (
                                 <span style={{ fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>
                                   · {topIssue.name} ({topIssue.urls} URLs)
@@ -359,24 +375,25 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
                           )}
 
                           {/* Crawl health row */}
-                          {pages > 0 && (
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {totalCrawled > 0 && (
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Crawl</span>
                               <span style={{ fontSize: 11, fontWeight: 600, color: "#0E7490", background: "#ECFEFF", border: "1px solid #A5F3FC", borderRadius: 4, padding: "2px 8px" }}>
-                                {fmtK(pages)} pages
+                                {fmtK(totalCrawled)} URLs crawled
                               </span>
-                              {indexable != null && (
+                              {htmlPages > 0 && (
                                 <span style={{ fontSize: 11, fontWeight: 600, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 4, padding: "2px 8px" }}>
-                                  {indexable} indexable
+                                  {fmtK(htmlPages)} HTML pages
                                 </span>
                               )}
-                              {avgRt && (
+                              {avgRt && avgRt !== "—" && (
                                 <span style={{ fontSize: 11, fontWeight: 600, color: Number(avgRt) > 2 ? "#DC2626" : Number(avgRt) > 1 ? "#B45309" : "#15803D", background: Number(avgRt) > 2 ? "#FEF2F2" : Number(avgRt) > 1 ? "#FFFBEB" : "#F0FDF4", border: `1px solid ${Number(avgRt) > 2 ? "#FECACA" : Number(avgRt) > 1 ? "#FDE68A" : "#BBF7D0"}`, borderRadius: 4, padding: "2px 8px" }}>
-                                  ⚡ {avgRt}s avg
+                                  ⚡ {avgRt}s avg response
                                 </span>
                               )}
                               {thin > 0 && (
                                 <span style={{ fontSize: 11, fontWeight: 600, color: "#B45309", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 4, padding: "2px 8px" }}>
-                                  {thin} thin pages
+                                  {thin} thin content pages
                                 </span>
                               )}
                             </div>
@@ -417,6 +434,8 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
           tests={tests}
           onCreateClient={onCreateClient}
           onUpdateClient={onUpdateClient}
+          onUpdateClientCustomUA={onUpdateClientCustomUA}
+          onSaveCrawlReport={onSaveCrawlReport}
           onDeleteClient={onDeleteClient}
           onClose={() => setClientsModalOpen(false)}
         />
@@ -432,10 +451,12 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
           const saved = await onCreateTest({ clientId, testName: "Untitled Test", status: "Backlog" });
           navigate(ap(`/tests/${saved.id}`));
         }}
-        onSelectRecommendation={async (testData, screenshots) => {
-          const saved = await onCreateTest(testData);
-          if (Object.keys(screenshots).length > 0) await onSaveScreenshots(saved.id, screenshots);
-          navigate(ap(`/tests/${saved.id}`));
+        onSelectRecommendation={async (items) => {
+          const saved = await Promise.all(items.map(({ testData }) => onCreateTest(testData)));
+          await Promise.all(items.map(({ screenshots }, i) => {
+            if (Object.keys(screenshots).length > 0) return onSaveScreenshots(saved[i].id, screenshots);
+          }));
+          navigate(ap(`/tests/${saved[0].id}`));
         }}
       />
     </div>

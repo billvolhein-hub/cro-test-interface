@@ -49,6 +49,9 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
 
   const brand = mergeBrand(client?.brand);
 
+  const [activeDomain,       setActiveDomain]       = useState(() => client?.domains?.[0] ?? "");
+  const [addingDomain,       setAddingDomain]       = useState(false);
+  const [newDomainInput,     setNewDomainInput]     = useState("");
   const [rawSfRows,          setRawSfRows]          = useState([]);
   const [rawIssueRows,       setRawIssueRows]       = useState([]);
   const [gscPages,           setGscPages]           = useState([]);
@@ -62,6 +65,46 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
   const [crawlDone,          setCrawlDone]          = useState(false);
   const [issuesDone,         setIssuesDone]         = useState(false);
   const [ahrefsDone,         setAhrefsDone]         = useState(false);
+
+  // Normalise crawlReports defensively — handles null client and old DB format
+  const crawlReports   = client?.crawlReports ?? {};
+  const clientDomains  = client?.domains ?? [];
+
+  // Active domain's report slice
+  const activeCrawlReport = crawlReports[activeDomain] ?? null;
+
+  // Save helpers — always write the full domain-keyed map
+  const saveDomainReport = useCallback((patch) => {
+    const updated = { ...(activeCrawlReport ?? {}), ...patch };
+    onSaveCrawlReport?.(clientId, { ...crawlReports, [activeDomain]: updated });
+  }, [activeCrawlReport, activeDomain, crawlReports, clientId, onSaveCrawlReport]);
+
+  const handleAddDomain = () => {
+    const d = newDomainInput.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (!d) { setAddingDomain(false); setNewDomainInput(""); return; }
+    if (!crawlReports[d]) {
+      onSaveCrawlReport?.(clientId, { ...crawlReports, [d]: { domain: d } });
+    }
+    setActiveDomain(d);
+    setAddingDomain(false);
+    setNewDomainInput("");
+    setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setGscDone(false); setGa4Done(false);
+  };
+
+  const handleRemoveDomain = (d) => {
+    if (!window.confirm(`Remove all report data for ${d}? This cannot be undone.`)) return;
+    const updated = { ...crawlReports };
+    delete updated[d];
+    onSaveCrawlReport?.(clientId, updated);
+    const remaining = Object.keys(updated);
+    setActiveDomain(remaining[0] ?? "");
+  };
+
+  const switchDomain = (d) => {
+    setActiveDomain(d);
+    setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setGscDone(false); setGa4Done(false);
+    setRawSfRows([]); setRawIssueRows([]); setGscPages([]); setGscQueries([]); setGa4Rows([]);
+  };
   const crawlRef   = useRef(null);
   const ahrefsRef  = useRef(null);
   const modalRef   = useRef(null);
@@ -662,8 +705,48 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
         {/* ══ SEO TAB ══════════════════════════════════════════════════════════ */}
         {activeTab === "seo" && (
           <>
+            {/* ── Domain selector ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
+              {clientDomains.map(d => (
+                <div key={d} style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                  <button
+                    onClick={() => switchDomain(d)}
+                    style={{ fontSize: 12, fontWeight: 600, background: activeDomain === d ? TEAL : CARD, color: activeDomain === d ? "#fff" : TEXT, border: `1.5px solid ${activeDomain === d ? TEAL : BORDER}`, borderRadius: activeDomain === d ? "6px 0 0 6px" : 6, padding: "5px 14px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}
+                  >{d}</button>
+                  {!isPortal && activeDomain === d && clientDomains.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveDomain(d)}
+                      title={`Remove ${d}`}
+                      style={{ fontSize: 11, background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FECACA", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", cursor: "pointer", lineHeight: 1 }}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+              {!isPortal && (
+                addingDomain ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      value={newDomainInput}
+                      onChange={e => setNewDomainInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleAddDomain(); if (e.key === "Escape") { setAddingDomain(false); setNewDomainInput(""); } }}
+                      placeholder="e.g. other.example.com"
+                      autoFocus
+                      style={{ border: `1.5px solid ${TEAL}`, borderRadius: 6, padding: "5px 10px", fontFamily: "'Inter',sans-serif", fontSize: 12, color: TEXT, outline: "none", width: 200 }}
+                    />
+                    <button onClick={handleAddDomain} style={{ fontSize: 12, fontWeight: 700, background: TEAL, color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Add</button>
+                    <button onClick={() => { setAddingDomain(false); setNewDomainInput(""); }} style={{ fontSize: 12, color: MUTED, background: "none", border: `1.5px solid ${BORDER}`, borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingDomain(true)}
+                    style={{ fontSize: 12, color: MUTED, background: "none", border: `1.5px dashed ${BORDER}`, borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: "'Inter',sans-serif" }}
+                  >+ Add domain</button>
+                )
+              )}
+            </div>
+
             {/* ── Build Site Report ── */}
-            {!isPortal && (
+            {!isPortal && activeDomain && (
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
                 <button
                   onClick={() => { setCrawlDone(false); setIssuesDone(false); setAhrefsDone(false); setGscDone(false); setGa4Done(false); setPendingDomain(""); setModalOpen(true); }}
@@ -682,59 +765,81 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
               </div>
             )}
 
-            {/* ── Report Builder Modal ── */}
-            {!isPortal && (
-              <ReportBuilderModal
-                ref={modalRef}
-                isOpen={modalOpen}
-                onClose={() => setModalOpen(false)}
-                crawlRef={crawlRef}
-                savedDomain={client.crawlReport?.domain ?? ""}
-                crawlDone={crawlDone}
-                issuesDone={issuesDone}
-                ahrefsDone={ahrefsDone}
-                gscDone={gscDone}
-                ga4Done={ga4Done}
-                onGscData={(pages, queries) => { setGscPages(pages); setGscQueries(queries); setGscDone(true); }}
-                onGa4Data={(rows) => { setGa4Rows(rows); setGa4Done(true); }}
-              />
+            {/* ── Prompt to add a domain if none exist ── */}
+            {!activeDomain && !isPortal && (
+              <div style={{ textAlign: "center", padding: "48px 0", color: MUTED }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🌐</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>No domains added yet</div>
+                <div style={{ fontSize: 12, marginBottom: 16 }}>Add a domain above to start building site reports.</div>
+              </div>
             )}
 
-            {/* ── Backlink Intelligence ── */}
-            <AhrefsReport
-              ref={ahrefsRef}
-              defaultDomain={client.crawlReport?.domain ?? ""}
-              savedData={client.crawlReport?.ahrefs ?? null}
-              onFetchComplete={() => setAhrefsDone(true)}
-              onSave={(ahrefsData) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ahrefs: ahrefsData })}
-              isPortal={isPortal}
-            />
+            {activeDomain && (
+              <>
+                {/* ── Report Builder Modal ── */}
+                {!isPortal && (
+                  <ReportBuilderModal
+                    ref={modalRef}
+                    isOpen={modalOpen}
+                    onClose={() => setModalOpen(false)}
+                    crawlRef={crawlRef}
+                    savedDomain={activeDomain}
+                    crawlDone={crawlDone}
+                    issuesDone={issuesDone}
+                    ahrefsDone={ahrefsDone}
+                    gscDone={gscDone}
+                    ga4Done={ga4Done}
+                    onGscData={(pages, queries) => { setGscPages(pages); setGscQueries(queries); setGscDone(true); }}
+                    onGa4Data={(rows) => { setGa4Rows(rows); setGa4Done(true); }}
+                  />
+                )}
 
-            {/* ── SEO Report ── */}
-            <CrawlReport
-              ref={crawlRef}
-              clientId={clientId}
-              crawlReport={client.crawlReport}
-              onSave={(report) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), ...report })}
-              onDomainExtracted={(domain) => { setPendingDomain(domain); }}
-              onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
-              onRawSfRows={setRawSfRows}
-              onRawIssueRows={setRawIssueRows}
-              isPortal={isPortal}
-              brand={client.brand}
-            />
+                {/* ── Backlink Intelligence ── */}
+                <AhrefsReport
+                  ref={ahrefsRef}
+                  defaultDomain={activeDomain}
+                  savedData={activeCrawlReport?.ahrefs ?? null}
+                  onFetchComplete={() => setAhrefsDone(true)}
+                  onSave={(ahrefsData) => saveDomainReport({ ahrefs: ahrefsData })}
+                  isPortal={isPortal}
+                />
 
-            {!isPortal && (
-              <CrossSignalReport
-                sfRows={rawSfRows}
-                sfIssueRows={rawIssueRows}
-                gscPages={gscPages}
-                gscQueries={gscQueries}
-                ga4Rows={ga4Rows}
-                savedData={client.crawlReport?.crossSignal ?? null}
-                onSave={(data) => onSaveCrawlReport?.(clientId, { ...(client.crawlReport ?? {}), crossSignal: data })}
-                ahrefsData={client.crawlReport?.ahrefs ?? null}
-              />
+                {/* ── SEO Report ── */}
+                <CrawlReport
+                  ref={crawlRef}
+                  clientId={clientId}
+                  crawlReport={activeCrawlReport}
+                  onSave={(report) => {
+                    const domain = report.domain || activeDomain;
+                    onSaveCrawlReport?.(clientId, {
+                      ...(client.crawlReports ?? {}),
+                      [domain]: { ...(client.crawlReports?.[domain] ?? {}), ...report },
+                    });
+                  }}
+                  onDomainExtracted={(domain) => {
+                    setPendingDomain(domain);
+                    if (domain && domain !== activeDomain) setActiveDomain(domain);
+                  }}
+                  onBuildComplete={(type) => { if (type === "crawl") setCrawlDone(true); if (type === "issues") setIssuesDone(true); }}
+                  onRawSfRows={setRawSfRows}
+                  onRawIssueRows={setRawIssueRows}
+                  isPortal={isPortal}
+                  brand={client.brand}
+                />
+
+                {!isPortal && (
+                  <CrossSignalReport
+                    sfRows={rawSfRows}
+                    sfIssueRows={rawIssueRows}
+                    gscPages={gscPages}
+                    gscQueries={gscQueries}
+                    ga4Rows={ga4Rows}
+                    savedData={activeCrawlReport?.crossSignal ?? null}
+                    onSave={(data) => saveDomainReport({ crossSignal: data })}
+                    ahrefsData={activeCrawlReport?.ahrefs ?? null}
+                  />
+                )}
+              </>
             )}
           </>
         )}
@@ -750,10 +855,12 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
           const saved = await onCreateTest({ clientId: cid ?? clientId, testName: "Untitled Test", status: "Backlog" });
           navigate(ap(`/tests/${saved.id}`));
         }}
-        onSelectRecommendation={async (testData, screenshots) => {
-          const saved = await onCreateTest({ ...testData, clientId: testData.clientId ?? clientId });
-          if (Object.keys(screenshots).length > 0) await onSaveScreenshots?.(saved.id, screenshots);
-          navigate(ap(`/tests/${saved.id}`));
+        onSelectRecommendation={async (items) => {
+          const saved = await Promise.all(items.map(({ testData }) => onCreateTest({ ...testData, clientId: testData.clientId ?? clientId })));
+          await Promise.all(items.map(({ screenshots }, i) => {
+            if (Object.keys(screenshots).length > 0) return onSaveScreenshots?.(saved[i].id, screenshots);
+          }));
+          navigate(ap(`/tests/${saved[0].id}`));
         }}
       />
     </div>

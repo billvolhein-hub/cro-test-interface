@@ -151,6 +151,7 @@ export default function IdeationModal({
   const [gaFile, setGaFile]               = useState(null);
   const [gscFile, setGscFile]             = useState(null);
   const [pageUrl, setPageUrl]             = useState("");
+  const [instructions, setInstructions]   = useState("");
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError]                 = useState("");
   const capturedScreenshot                = useRef(null);
@@ -163,7 +164,9 @@ export default function IdeationModal({
     setGaFile(null);
     setGscFile(null);
     setPageUrl("");
+    setInstructions("");
     setRecommendations([]);
+    setSelectedRecs(new Set());
     setError("");
     capturedScreenshot.current = null;
     setSelectedClientId(defaultClientId());
@@ -200,7 +203,10 @@ export default function IdeationModal({
       // 1. Screenshot the URL via Puppeteer (optional — only available in local dev)
       let screenshot = null;
       try {
-        const ssRes = await fetch(`/api/screenshot?url=${encodeURIComponent(pageUrl)}`);
+        const activeClient = clients.find(c => c.id === selectedClientId);
+        const ssParams = new URLSearchParams({ url: pageUrl });
+        if (activeClient?.customUA) ssParams.set("ua", activeClient.customUA);
+        const ssRes = await fetch(`/api/screenshot?${ssParams.toString()}`);
         if (ssRes.ok) {
           const ssData = await ssRes.json();
           if (ssData.dataUrl) {
@@ -232,6 +238,12 @@ export default function IdeationModal({
           text: [
             `Page URL: ${pageUrl}`,
             "",
+            ...(instructions.trim() ? [
+              "=== CLIENT INSTRUCTIONS ===",
+              instructions.trim(),
+              "(Follow these instructions when selecting which levers to focus on and what to avoid.)",
+              "",
+            ] : []),
             "=== GOOGLE ANALYTICS (90-day) ===",
             gaTextTruncated,
             "",
@@ -253,15 +265,9 @@ export default function IdeationModal({
         },
       ];
 
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/anthropic/v1/messages", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-opus-4-6",
           max_tokens: 4096,
@@ -294,29 +300,28 @@ export default function IdeationModal({
     }
   };
 
-  const [selecting, setSelecting] = useState(false);
+  const [selectedRecs, setSelectedRecs] = useState(new Set());
+  const [selecting,    setSelecting]    = useState(false);
 
-  const handleSelect = async (rec) => {
+  const toggleRec = (i) => {
+    setSelectedRecs(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const buildTestData = async (rec) => {
     const screenshotUrl = capturedScreenshot.current?.dataUrl ?? null;
-
-    // Compute overlay positions in variantDesktop zone
     const mockTest = { if: rec.if, then: rec.then, because: rec.because, variants: ["B"] };
     const { W, totalH, zones } = computeSVGZones(mockTest);
     const variantZone = zones.find(z => z.key === "variantDesktop");
-
     const overlayDefs = rec.overlays ?? [];
     const overlayArr = overlayDefs.slice(0, 3).map((o, i) => {
       const overlayType = OVERLAY_TYPES.find(t => t.label === o.type) ?? OVERLAY_TYPES[1];
       const svgX = variantZone.x + (o.xFrac ?? 0.5) * variantZone.w;
       const svgY = variantZone.y + (o.yFrac ?? (0.25 + i * 0.25)) * variantZone.h;
-      return {
-        id: Date.now() + i,
-        label: overlayType.label,
-        color: overlayType.color,
-        note: o.note ?? "",
-        relX: svgX / W,
-        relY: svgY / totalH,
-      };
+      return { id: Date.now() + i, label: overlayType.label, color: overlayType.color, note: o.note ?? "", relX: svgX / W, relY: svgY / totalH };
     });
 
     const testData = {
@@ -334,38 +339,37 @@ export default function IdeationModal({
       importance:       rec.importance,
       ease:             rec.ease,
       overlays:         { B: overlayArr },
+      results: {
+        aiPrediction: {
+          probability: rec.successProbability,
+          evidence:    rec.dataEvidence ?? "",
+          lever:       rec.lever ?? "",
+          principle:   rec.behaviouralPrinciple ?? "",
+        },
+      },
     };
 
+    let screenshots = {};
+    if (screenshotUrl) {
+      const cx = overlayDefs.length ? overlayDefs.reduce((s, o) => s + (o.xFrac ?? 0.5), 0) / overlayDefs.length : 0.5;
+      const cy = overlayDefs.length ? overlayDefs.reduce((s, o) => s + (o.yFrac ?? 0.5), 0) / overlayDefs.length : 0.5;
+      const variantCrop = await cropImageToArea(screenshotUrl, cx, cy);
+      screenshots = { controlDesktop: screenshotUrl, controlMobile: screenshotUrl, variantDesktop: variantCrop, variantMobile: variantCrop };
+    }
+
+    return { testData, screenshots };
+  };
+
+  const handleBuildSelected = async () => {
+    if (selectedRecs.size === 0) return;
     setSelecting(true);
     setError("");
     try {
-      // Build per-zone screenshots:
-      // Control zones: full screenshot
-      // Variant zones: cropped to the area the overlays point at
-      let screenshots = {};
-      if (screenshotUrl) {
-        // Centroid of overlay positions in screenshot coords
-        const cx = overlayDefs.length
-          ? overlayDefs.reduce((s, o) => s + (o.xFrac ?? 0.5), 0) / overlayDefs.length
-          : 0.5;
-        const cy = overlayDefs.length
-          ? overlayDefs.reduce((s, o) => s + (o.yFrac ?? 0.5), 0) / overlayDefs.length
-          : 0.5;
-
-        const variantCrop = await cropImageToArea(screenshotUrl, cx, cy);
-
-        screenshots = {
-          controlDesktop: screenshotUrl,
-          controlMobile:  screenshotUrl,
-          variantDesktop: variantCrop,
-          variantMobile:  variantCrop,
-        };
-      }
-
-      await onSelectRecommendation(testData, screenshots);
+      const items = await Promise.all([...selectedRecs].sort().map(i => buildTestData(recommendations[i])));
+      await onSelectRecommendation(items);
       reset();
     } catch (err) {
-      setError(err.message || "Failed to create test. Please try again.");
+      setError(err.message || "Failed to create tests. Please try again.");
       setSelecting(false);
     }
   };
@@ -425,6 +429,21 @@ export default function IdeationModal({
                   <option value="">— No client —</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+                {(() => {
+                  const ac = clients.find(c => c.id === selectedClientId);
+                  if (!ac || ac.domains.length <= 1) return null;
+                  return (
+                    <div style={{ marginTop: 6, fontSize: 11, color: MUTED }}>
+                      Tracked domains:{" "}
+                      {ac.domains.map((d, i) => (
+                        <span key={d}>
+                          <span style={{ fontWeight: 600, color: TEXT }}>{d}</span>
+                          {i < ac.domains.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
@@ -493,6 +512,24 @@ export default function IdeationModal({
                     width: "100%", padding: "10px 12px", border: `1.5px solid ${BORDER}`,
                     borderRadius: 7, fontSize: 13, fontFamily: "'Inter',sans-serif",
                     color: TEXT, background: BG, outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 6, letterSpacing: 0.3 }}>
+                  Instructions for Claude <span style={{ fontWeight: 400, color: DIM }}>(optional)</span>
+                </label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="e.g. Focus on mobile checkout friction. Avoid recommendations related to hero image. The client's brand voice is friendly but professional. Don't suggest pop-ups."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "10px 12px", border: `1.5px solid ${BORDER}`,
+                    borderRadius: 7, fontSize: 13, fontFamily: "'Inter',sans-serif",
+                    color: TEXT, background: BG, outline: "none", boxSizing: "border-box",
+                    resize: "vertical", lineHeight: 1.55,
                   }}
                 />
               </div>
@@ -569,89 +606,128 @@ export default function IdeationModal({
                   {error}
                 </div>
               )}
-              {recommendations.map((rec, i) => (
-                <div
-                  key={i}
-                  style={{
-                    border: `1.5px solid ${BORDER}`, borderRadius: 10,
-                    padding: "20px", background: BG,
-                    transition: "border-color .15s, box-shadow .15s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = TEAL; e.currentTarget.style.boxShadow = "0 4px 16px rgba(42,140,140,.1)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = "none"; }}
-                >
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: TEXT, marginBottom: 4 }}>
-                        {i + 1}. {rec.testName}
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: rec.successProbability >= 70 ? "#15803D" : rec.successProbability >= 50 ? "#B45309" : "#DC2626", borderRadius: 4, padding: "2px 8px" }}>
-                          {rec.successProbability}% predicted success
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px" }}>
-                          {rec.testType}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px" }}>
-                          {rec.audience}
-                        </span>
-                      </div>
-                    </div>
-                    {/* PIE scores */}
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <ScoreBadge value={rec.potential}   color="#C9A84C" />
-                      <ScoreBadge value={rec.importance}  color="#1B3A6B" />
-                      <ScoreBadge value={rec.ease}        color="#2A8C8C" />
-                    </div>
-                  </div>
 
-                  {/* Hypothesis */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                    {[
-                      { label: "IF",      color: "#1B3A6B", text: rec.if },
-                      { label: "THEN",    color: "#2A8C8C", text: rec.then },
-                      { label: "BECAUSE", color: "#C9A84C", text: rec.because },
-                    ].map(({ label, color, text }) => (
-                      <div key={label} style={{ display: "flex", gap: 8 }}>
-                        <div style={{ width: 3, background: color, borderRadius: 2, flexShrink: 0, alignSelf: "stretch" }} />
-                        <div>
-                          <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 0.8 }}>{label} — </span>
-                          <span style={{ fontSize: 12, color: TEXT }}>{text}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {/* Selection hint */}
+              <div style={{ fontSize: 12, color: MUTED, textAlign: "center" }}>
+                Select one or more tests to build, then click <strong>Build Selected</strong>.
+              </div>
 
-                  {/* Metrics + Overlays row */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, fontSize: 12 }}>
-                    <span style={{ color: MUTED }}>Primary: <strong style={{ color: TEXT }}>{rec.primaryMetric}</strong></span>
-                    {(rec.secondaryMetrics ?? []).slice(0, 2).map((m, mi) => (
-                      <span key={mi} style={{ color: MUTED }}>· {m}</span>
-                    ))}
-                    {(rec.overlays ?? []).map((o, oi) => {
-                      const ot = OVERLAY_TYPES.find(t => t.label === o.type);
-                      return (
-                        <span key={oi} style={{ fontSize: 11, fontWeight: 600, color: ot?.color ?? MUTED, background: `${ot?.color ?? MUTED}14`, borderRadius: 4, padding: "2px 7px" }}>
-                          {o.type}: {o.note}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    onClick={() => handleSelect(rec)}
-                    disabled={selecting}
+              {recommendations.map((rec, i) => {
+                const isSelected = selectedRecs.has(i);
+                const probColor = rec.successProbability >= 70 ? "#15803D" : rec.successProbability >= 50 ? "#B45309" : "#DC2626";
+                const probBg    = rec.successProbability >= 70 ? "#F0FDF4" : rec.successProbability >= 50 ? "#FFFBEB" : "#FEF2F2";
+                return (
+                  <div
+                    key={i}
+                    onClick={() => !selecting && toggleRec(i)}
                     style={{
-                      width: "100%", padding: "10px 0", background: selecting ? DIM : TEAL, color: "#fff",
-                      border: "none", borderRadius: 7, fontSize: 13, fontWeight: 700,
-                      cursor: selecting ? "not-allowed" : "pointer", fontFamily: "'Inter',sans-serif",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      border: `2px solid ${isSelected ? TEAL : BORDER}`,
+                      borderRadius: 10,
+                      padding: "20px",
+                      background: isSelected ? "#F0FAFA" : BG,
+                      transition: "border-color .15s, box-shadow .15s, background .15s",
+                      cursor: selecting ? "default" : "pointer",
+                      boxShadow: isSelected ? "0 4px 16px rgba(42,140,140,.12)" : "none",
                     }}
                   >
-                    {selecting ? "Creating test…" : "Use This Test →"}
-                  </button>
-                </div>
-              ))}
+                    {/* Card header: number + name + checkbox + PIE */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                      {/* Checkbox */}
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 2,
+                        border: `2px solid ${isSelected ? TEAL : BORDER}`,
+                        background: isSelected ? TEAL : "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {isSelected && <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4l3 3 6-6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: TEXT, marginBottom: 6 }}>
+                          {i + 1}. {rec.testName}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: probColor, background: probBg, border: `1px solid ${probColor}44`, borderRadius: 4, padding: "2px 8px" }}>
+                            ✨ {rec.successProbability}% predicted success
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px" }}>{rec.testType}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "2px 8px" }}>{rec.audience}</span>
+                        </div>
+                      </div>
+
+                      {/* PIE scores */}
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <ScoreBadge value={rec.potential}  color="#C9A84C" />
+                        <ScoreBadge value={rec.importance} color="#1B3A6B" />
+                        <ScoreBadge value={rec.ease}       color="#2A8C8C" />
+                      </div>
+                    </div>
+
+                    {/* Evidence for prediction */}
+                    {rec.dataEvidence && (
+                      <div style={{ fontSize: 12, color: "#374151", background: `${probColor}0D`, border: `1px solid ${probColor}33`, borderRadius: 6, padding: "8px 12px", marginBottom: 12, lineHeight: 1.5 }}>
+                        <span style={{ fontWeight: 700, color: probColor }}>Why {rec.successProbability}%: </span>
+                        {rec.dataEvidence}
+                        {rec.behaviouralPrinciple && <span style={{ color: MUTED }}> · <em>{rec.behaviouralPrinciple}</em></span>}
+                      </div>
+                    )}
+
+                    {/* Hypothesis */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                      {[
+                        { label: "IF",      color: "#1B3A6B", text: rec.if },
+                        { label: "THEN",    color: "#2A8C8C", text: rec.then },
+                        { label: "BECAUSE", color: "#C9A84C", text: rec.because },
+                      ].map(({ label, color, text }) => (
+                        <div key={label} style={{ display: "flex", gap: 8 }}>
+                          <div style={{ width: 3, background: color, borderRadius: 2, flexShrink: 0, alignSelf: "stretch" }} />
+                          <div>
+                            <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: 0.8 }}>{label} — </span>
+                            <span style={{ fontSize: 12, color: TEXT }}>{text}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Metrics + Overlays */}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 12 }}>
+                      <span style={{ color: MUTED }}>Primary: <strong style={{ color: TEXT }}>{rec.primaryMetric}</strong></span>
+                      {(rec.secondaryMetrics ?? []).slice(0, 2).map((m, mi) => (
+                        <span key={mi} style={{ color: MUTED }}>· {m}</span>
+                      ))}
+                      {(rec.overlays ?? []).map((o, oi) => {
+                        const ot = OVERLAY_TYPES.find(t => t.label === o.type);
+                        return (
+                          <span key={oi} style={{ fontSize: 11, fontWeight: 600, color: ot?.color ?? MUTED, background: `${ot?.color ?? MUTED}14`, borderRadius: 4, padding: "2px 7px" }}>
+                            {o.type}: {o.note}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Bulk build button */}
+              <button
+                onClick={handleBuildSelected}
+                disabled={selecting || selectedRecs.size === 0}
+                style={{
+                  width: "100%", padding: "12px 0",
+                  background: selectedRecs.size > 0 && !selecting ? TEAL : DIM,
+                  color: "#fff", border: "none", borderRadius: 8,
+                  fontSize: 14, fontWeight: 700, cursor: selectedRecs.size > 0 && !selecting ? "pointer" : "not-allowed",
+                  fontFamily: "'Inter',sans-serif",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  transition: "background .15s",
+                }}
+              >
+                {selecting
+                  ? "Building tests…"
+                  : selectedRecs.size === 0
+                    ? "Select tests above to build"
+                    : `✨ Build ${selectedRecs.size} Selected Test${selectedRecs.size !== 1 ? "s" : ""} →`}
+              </button>
 
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <button

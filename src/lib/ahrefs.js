@@ -23,7 +23,7 @@ export async function getDomainRating(target) {
 export async function getDomainRatingHistory(target) {
   return ahrefs("domain-rating-history", {
     target:           stripProtocol(target),
-    date_from:        daysAgo(365 * 3),
+    date_from:        daysAgo(365),
     date_to:          today(),
     history_grouping: "monthly",
   });
@@ -34,9 +34,9 @@ export async function getMetricsExtended(target) {
 }
 
 export async function getBacklinksHistory(target) {
-  // Build the 1st of each month for the past 12 months
+  // Build the 1st of each month for the past 6 months
   const dates = [];
-  for (let i = 11; i >= 0; i--) {
+  for (let i = 5; i >= 0; i--) {
     const d = new Date();
     d.setDate(1);
     d.setMonth(d.getMonth() - i);
@@ -67,7 +67,7 @@ export async function getRefdomains(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     select:   "domain,domain_rating,links_to_target,dofollow_links,first_seen",
-    limit:    "5000",
+    limit:    "500",
     order_by: "links_to_target:desc",
   });
 }
@@ -77,7 +77,7 @@ export async function getAnchors(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     select:   "anchor,links_to_target,refpages,refdomains",
-    limit:    "50",
+    limit:    "20",
     order_by: "links_to_target:desc",
   });
 }
@@ -87,7 +87,7 @@ export async function getTopBacklinks(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     select:   "url_from,url_to,name_source,domain_rating_source,is_dofollow,anchor",
-    limit:    "1000",
+    limit:    "250",
     order_by: "domain_rating_source:desc",
   });
 }
@@ -97,7 +97,7 @@ export async function getBestByLinks(target) {
     target: stripProtocol(target),
     mode:   "domain",
     select: "url_to,title_target,refdomains_target,links_to_target",
-    limit:  "100",
+    limit:  "25",
   });
 }
 
@@ -106,7 +106,7 @@ export async function getBrokenBacklinks(target) {
     target:   stripProtocol(target),
     mode:     "domain",
     select:   "url_from,url_to,name_source,domain_rating_source,is_dofollow,anchor",
-    limit:    "500",
+    limit:    "100",
     order_by: "domain_rating_source:desc",
   });
 }
@@ -123,7 +123,7 @@ export async function getBacklinksNewLost(target) {
 
 export async function getSerpFeaturesHistory(target) {
   const months = [];
-  for (let i = 11; i >= 0; i--) {
+  for (let i = 5; i >= 0; i--) {
     const d = new Date();
     d.setDate(1);
     d.setMonth(d.getMonth() - i);
@@ -142,7 +142,7 @@ export async function getSerpFeaturesHistory(target) {
         mode:     "domain",
         date,
         select:   "keyword,serp_features,sum_traffic",
-        limit:    "1000",
+        limit:    "500",
         order_by: "sum_traffic:desc",
       }).then(data => {
         const keywords = data?.keywords ?? [];

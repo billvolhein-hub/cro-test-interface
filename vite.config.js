@@ -214,7 +214,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/anthropic/, ""),
           headers: {
-            "x-api-key":                                 env.VITE_ANTHROPIC_API_KEY,
+            "x-api-key":                                 env.ANTHROPIC_API_KEY,
             "anthropic-version":                         "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true",
           },
