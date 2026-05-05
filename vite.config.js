@@ -207,6 +207,30 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     plugins: [react(), screenshotPlugin(), ahrefsPlugin(env), dbPlugin(env), uploadPlugin(env)],
+    build: {
+      target: "es2020",
+      chunkSizeWarningLimit: 700,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/3d-force-graph") || id.includes("node_modules/three-spritetext") || id.includes("node_modules/three/"))
+              return "vendor-3d";
+            if (id.includes("node_modules/jspdf") || id.includes("node_modules/html2canvas") || id.includes("node_modules/stackblur") || id.includes("node_modules/canvg"))
+              return "vendor-pdf";
+            if (id.includes("node_modules/recharts") || id.includes("node_modules/victory-vendor") || id.includes("node_modules/d3-"))
+              return "vendor-charts";
+            if (id.includes("node_modules/jszip") || id.includes("node_modules/docx") || id.includes("node_modules/file-saver"))
+              return "vendor-docs";
+            if (id.includes("node_modules/exceljs"))
+              return "vendor-excel";
+            if (id.includes("node_modules/@supabase"))
+              return "vendor-supabase";
+            if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/react-router"))
+              return "vendor-react";
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         "/api/anthropic": {

@@ -1,5 +1,6 @@
-import { useState, useRef, forwardRef, useImperativeHandle } from "react";
-import DirectoryTreeModal from "./DirectoryTreeModal";
+import { useState, useRef, forwardRef, useImperativeHandle, lazy, Suspense } from "react";
+
+const DirectoryTreeModal = lazy(() => import("./DirectoryTreeModal"));
 import { CARD, BORDER, BG, TEXT, MUTED, TEAL, ACCENT } from "../lib/constants";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
@@ -861,7 +862,9 @@ const CrawlReport = forwardRef(function CrawlReport({ crawlReport, onSave, onDom
       )}
 
       {treeOpen && treeNodes?.length > 0 && (
-        <DirectoryTreeModal nodes={treeNodes} ahrefsData={crawlReport?.ahrefs} onClose={() => setTreeOpen(false)} brand={brand} />
+        <Suspense fallback={null}>
+          <DirectoryTreeModal nodes={treeNodes} ahrefsData={crawlReport?.ahrefs} onClose={() => setTreeOpen(false)} brand={brand} />
+        </Suspense>
       )}
     </div>
   );

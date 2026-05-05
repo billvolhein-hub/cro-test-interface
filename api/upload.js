@@ -1,4 +1,11 @@
+import { createClient } from "@supabase/supabase-js";
+
 export const config = { api: { bodyParser: { sizeLimit: "10mb" } } };
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const ALLOWED_BUCKETS = ["screenshots", "agency-logos"];
 
@@ -10,12 +17,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
     const { action, bucket, ...payload } = req.body ?? {};
     if (!bucket || !ALLOWED_BUCKETS.includes(bucket)) {
       return res.status(400).json({ error: "Bucket not allowed" });

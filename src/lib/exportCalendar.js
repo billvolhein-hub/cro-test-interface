@@ -1,4 +1,3 @@
-import ExcelJS from "exceljs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -204,6 +203,7 @@ function buildCalendarSheet(wb, tests, brand) {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function exportTestingCalendar(clientName, tests, brand = {}) {
+  const ExcelJS = (await import("exceljs")).default;
   // Use the client's dark background color for headers
   const headerBg   = brand.bgColor    ?? "#1B3A6B";
   const headerText = brand.textColor  ?? "#FFFFFF";

@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAgencies, createAgency, updateAgency, deleteAgency, fetchPlatformConfig, setPlatformConfig, uploadAgencyLogo } from "../lib/agencies";
 import { BG, BORDER, CARD, MUTED, TEXT, ACCENT } from "../lib/constants";
-import TechDocsModal from "../components/TechDocsModal";
-import SuperAdminKanban from "../components/SuperAdminKanban";
-import SuperAdminAnalytics from "../components/SuperAdminAnalytics";
+
+const TechDocsModal      = lazy(() => import("../components/TechDocsModal"));
+const SuperAdminKanban   = lazy(() => import("../components/SuperAdminKanban"));
+const SuperAdminAnalytics = lazy(() => import("../components/SuperAdminAnalytics"));
 
 const FIELD = { padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
 const BTN   = (bg, color = "#fff") => ({ padding: "8px 18px", borderRadius: 7, border: "none", background: bg, color, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" });
@@ -267,7 +268,9 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
         {/* Analytics Dashboard */}
         <div style={{ marginBottom: 28 }}>
-          <SuperAdminAnalytics />
+          <Suspense fallback={<div style={{ color: MUTED, fontSize: 13, padding: "20px 0" }}>Loading analytics…</div>}>
+            <SuperAdminAnalytics />
+          </Suspense>
         </div>
 
         {/* Agency list */}
@@ -306,7 +309,9 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
 
         {/* Projects Kanban */}
         <div style={{ marginTop: 28 }}>
-          <SuperAdminKanban />
+          <Suspense fallback={null}>
+            <SuperAdminKanban />
+          </Suspense>
         </div>
 
         {/* Create / Edit form */}
@@ -452,7 +457,9 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
           </div>
         )}
       </div>
-      <TechDocsModal open={showDocs} onClose={() => setShowDocs(false)} />
+      <Suspense fallback={null}>
+        <TechDocsModal open={showDocs} onClose={() => setShowDocs(false)} />
+      </Suspense>
     </div>
   );
 }

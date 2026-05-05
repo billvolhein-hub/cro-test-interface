@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { fetchAgencyBySlug, updateAgency } from "../lib/agencies";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "../db";
@@ -9,11 +9,12 @@ import {
 } from "../lib/api";
 import { AgencyContext } from "../context/AgencyContext";
 import { AgencyGate } from "./PasswordGate";
-import HomePage            from "../pages/HomePage";
-import TestDetailsPage     from "../pages/TestDetailsPage";
-import TestDefinitionPage  from "../pages/TestDefinitionPage";
-import ClientPage          from "../pages/ClientPage";
 import { BG, MUTED } from "../lib/constants";
+
+const HomePage           = lazy(() => import("../pages/HomePage"));
+const TestDetailsPage    = lazy(() => import("../pages/TestDetailsPage"));
+const TestDefinitionPage = lazy(() => import("../pages/TestDefinitionPage"));
+const ClientPage         = lazy(() => import("../pages/ClientPage"));
 
 export default function AgencyWrapper() {
   const { agencySlug } = useParams();
@@ -212,6 +213,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
         </div>
       )}
 
+      <Suspense fallback={<Spinner />}>
       <Routes>
         <Route path="/"
           element={
@@ -247,6 +249,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
         />
         <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
       </Routes>
+      </Suspense>
     </AgencyContext.Provider>
   );
 }

@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { fetchAgencies } from "./lib/agencies";
 import { fetchClients, fetchTests } from "./lib/api";
 import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import { SuperAdminGate, PortalGate } from "./components/PasswordGate";
-import SuperAdminPage  from "./pages/SuperAdminPage";
-import AgencyWrapper   from "./components/AgencyWrapper";
-import TestDetailsPage from "./pages/TestDetailsPage";
-import ClientPage      from "./pages/ClientPage";
 import { PortalContext } from "./context/PortalContext";
 import { ACCENT, BG, MUTED } from "./lib/constants";
+
+const SuperAdminPage  = lazy(() => import("./pages/SuperAdminPage"));
+const AgencyWrapper   = lazy(() => import("./components/AgencyWrapper"));
+const TestDetailsPage = lazy(() => import("./pages/TestDetailsPage"));
+const ClientPage      = lazy(() => import("./pages/ClientPage"));
 
 // ── Portal wrapper — looks up client by token, applies gate + context ─────────
 function PortalTokenGate({ clients, screenshotsMap, setScreenshotsMap, onUpdateTest, onSaveScreenshot, onClearScreenshot, onUpdateClientBrand }) {
@@ -97,31 +98,33 @@ function Spinner() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Platform admin — manage agencies */}
-        <Route path="/" element={<SuperAdminShell />} />
+      <Suspense fallback={<Spinner />}>
+        <Routes>
+          {/* Platform admin — manage agencies */}
+          <Route path="/" element={<SuperAdminShell />} />
 
-        {/* Client portals — unchanged, accessed by portalToken UUID */}
-        <Route path="/portal/:portalToken" element={
-          <PortalShell>
-            {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
-              <PortalRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
-            )}
-          </PortalShell>
-        } />
-        <Route path="/portal/:portalToken/tests/:testSlug" element={
-          <PortalShell>
-            {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
-              <PortalTestRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
-            )}
-          </PortalShell>
-        } />
+          {/* Client portals — unchanged, accessed by portalToken UUID */}
+          <Route path="/portal/:portalToken" element={
+            <PortalShell>
+              {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
+                <PortalRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
+              )}
+            </PortalShell>
+          } />
+          <Route path="/portal/:portalToken/tests/:testSlug" element={
+            <PortalShell>
+              {({ clients, tests, screenshotsMap, setScreenshotsMap }) => (
+                <PortalTestRoute clients={clients} tests={tests} screenshotsMap={screenshotsMap} setScreenshotsMap={setScreenshotsMap} />
+              )}
+            </PortalShell>
+          } />
 
-        {/* Agency admin — all agency routes handled inside AgencyWrapper */}
-        <Route path="/:agencySlug/*" element={<AgencyWrapper />} />
+          {/* Agency admin — all agency routes handled inside AgencyWrapper */}
+          <Route path="/:agencySlug/*" element={<AgencyWrapper />} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

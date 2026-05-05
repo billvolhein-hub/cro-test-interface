@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react";
-import JSZip from "jszip";
 import { BORDER, MUTED, TEXT, TEAL } from "../lib/constants";
 import { parseCSVToObjects, parseGA4CSVToObjects } from "../lib/mergeReportData";
 
@@ -72,6 +71,7 @@ function StatusRow({ icon, doneIcon, label, detail, done, loading, color }) {
 }
 
 async function readGscZip(file) {
+  const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(file);
   const names = Object.keys(zip.files);
   let pagesText = null, queriesText = null;

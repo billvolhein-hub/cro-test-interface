@@ -1,3 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
 const ALLOWED_TABLES = ["clients", "tests", "agencies", "platform_config"];
 
 export default async function handler(req, res) {
@@ -8,12 +15,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
     const { table, action, ...payload } = req.body ?? {};
     if (!table || !action) return res.status(400).json({ error: "Missing table or action" });
     if (!ALLOWED_TABLES.includes(table)) return res.status(400).json({ error: "Table not allowed" });
