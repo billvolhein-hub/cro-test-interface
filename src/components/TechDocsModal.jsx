@@ -8,6 +8,7 @@ const NAV = [
   { id: "api-routes",    icon: "⚡",  label: "API Routes" },
   { id: "database",      icon: "🔧",  label: "Database Schema" },
   { id: "ai",            icon: "🤖",  label: "AI Integration" },
+  { id: "performance",   icon: "🚀",  label: "Performance" },
   { id: "environment",   icon: "🌍",  label: "Environment & Deploy" },
 ];
 
@@ -545,6 +546,94 @@ messages: [{ role: "user", content: [
     </div>
   ),
 
+  performance: (
+    <div>
+      <H2>Performance & Bundle</H2>
+
+      <H3 color={ACCENT}>Bundle Strategy</H3>
+      <P>The app uses route-level code splitting + vendor chunking to minimize initial load. The old monolithic 2,248 kB bundle is now ~18 kB on first visit — all heavy libraries load on-demand only.</P>
+
+      <H3 color={ACCENT}>Route-Level Lazy Loading</H3>
+      <P>Every top-level page is wrapped in <Code>React.lazy()</Code> + <Code>{"<Suspense>"}</Code>. The pattern is applied in both <Code>App.jsx</Code> (top-level routes) and <Code>AgencyWrapper.jsx</Code> (agency sub-routes):</P>
+      <Code block>{`// App.jsx
+const SuperAdminPage  = lazy(() => import("./pages/SuperAdminPage"));
+const AgencyWrapper   = lazy(() => import("./components/AgencyWrapper"));
+const TestDetailsPage = lazy(() => import("./pages/TestDetailsPage"));
+const ClientPage      = lazy(() => import("./pages/ClientPage"));
+
+// Wrap <Routes> in Suspense:
+<Suspense fallback={<Spinner />}>
+  <Routes>...</Routes>
+</Suspense>
+
+// AgencyWrapper.jsx — same pattern for sub-pages:
+const HomePage           = lazy(() => import("../pages/HomePage"));
+const TestDetailsPage    = lazy(() => import("../pages/TestDetailsPage"));
+const TestDefinitionPage = lazy(() => import("../pages/TestDefinitionPage"));
+const ClientPage         = lazy(() => import("../pages/ClientPage"));`}</Code>
+      <P><strong>Rule:</strong> Every new page added to the router must use <Code>React.lazy()</Code>. Never statically import a page component in App.jsx or AgencyWrapper.jsx.</P>
+
+      <H3 color={ACCENT}>Vendor Chunk Map</H3>
+      <P>Heavy libraries are grouped into named chunks via <Code>vite.config.js manualChunks</Code>. Each chunk only loads when a user triggers the feature that needs it:</P>
+      <Table
+        headers={["Chunk", "Size", "Loads when"]}
+        rows={[
+          ["vendor-react", "180 kB", "Every page (React core + router)"],
+          ["vendor-3d", "1,282 kB", "User clicks 'View Site Tree' in CrawlReport"],
+          ["vendor-excel", "938 kB", "User clicks 'Export .xlsx' (exportCalendar)"],
+          ["vendor-pdf", "824 kB", "User exports PDF (jsPDF + html2canvas)"],
+          ["vendor-docs", "506 kB", "User uploads a .docx/.zip document"],
+          ["vendor-charts", "434 kB", "Super admin views Platform Analytics"],
+          ["vendor-supabase", "~90 kB", "Every page (Supabase client)"],
+        ]}
+      />
+
+      <H3 color={ACCENT}>Dynamic Imports for Heavy Libraries</H3>
+      <P>Libraries that are only needed on user action use <Code>await import()</Code> inside the handler that needs them. Never add a static top-level import for a large library.</P>
+      <Code block>{`// ExcelJS — only imports when export is triggered
+export async function exportTestingCalendar(clientName, tests, brand = {}) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  // ...
+}
+
+// JSZip — only imports when user uploads a ZIP file
+async function readGscZip(file) {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(file);
+  // ...
+}
+
+// DirectoryTreeModal (3D graph) — lazy in CrawlReport
+const DirectoryTreeModal = lazy(() => import("./DirectoryTreeModal"));
+// Only rendered when treeOpen && treeNodes?.length > 0`}</Code>
+
+      <H3 color={ACCENT}>Caching — 1-Year Immutable Assets</H3>
+      <P>Vercel serves all <Code>/assets/*</Code> files with <Code>Cache-Control: public, max-age=31536000, immutable</Code>. Vite content-hashes every file name, so returning visitors get instant loads from the CDN edge with zero network requests for unchanged assets.</P>
+
+      <H3 color={ACCENT}>Font Loading</H3>
+      <P>Google Fonts loads non-blocking via <Code>media="print" onload="this.media='all'"</Code> — the stylesheet no longer blocks first paint:</P>
+      <Code block>{`<link href="https://fonts.googleapis.com/css2?family=Inter..."
+      rel="stylesheet" media="print" onload="this.media='all'" />
+<noscript>
+  <link href="https://fonts.googleapis.com/css2?family=Inter..." rel="stylesheet" />
+</noscript>`}</Code>
+
+      <H3 color={ACCENT}>Serverless — Module-Scope Supabase Client</H3>
+      <P>In <Code>api/db.js</Code> and <Code>api/upload.js</Code>, the Supabase client is created once at module scope (not inside the handler) so warm container re-use avoids re-initialization overhead on every invocation:</P>
+      <Code block>{`import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+export default async function handler(req, res) {
+  // supabase is already initialized — no per-request overhead
+}`}</Code>
+    </div>
+  ),
+
   environment: (
     <div>
       <H2>Environment & Deployment</H2>
@@ -570,6 +659,14 @@ messages: [{ role: "user", content: [
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ],
   "functions": {
     "api/screenshot.js": { "memory": 1024, "maxDuration": 45 },
     "api/ahrefs.js":     { "maxDuration": 15 },
@@ -608,12 +705,15 @@ npm run preview`}</Code>
       <Li>Copy the project URL and service_role key to environment variables</Li>
 
       <H3 color={ACCENT}>Adding a New Page / Route</H3>
-      <Code block>{`// 1. Create the page component in src/pages/NewPage.jsx
-// 2. Add the route in AgencyApp routes (AgencyWrapper.jsx):
+      <Code block>{`// 1. Create the page component in src/pages/NewPage.jsx with a default export
+// 2. Lazy-import it in AgencyWrapper.jsx (NEVER static import — keeps bundle small):
+const NewPage = lazy(() => import("../pages/NewPage"));
+
+// 3. Add the route inside the <Suspense> in AgencyApp:
 <Route path="/new-path"
   element={<NewPage agencySlug={slug} {...sharedProps} />}
 />
-// 3. Add navigation link from AppHeader or relevant page`}</Code>
+// 4. Add navigation link from AppHeader or relevant page`}</Code>
     </div>
   ),
 };
