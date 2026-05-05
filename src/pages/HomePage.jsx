@@ -152,14 +152,42 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
             <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🧪 Testing</div>
             <div style={{ flex: 1, height: 1, background: BORDER }} />
             <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{tests.length} total</div>
-            <button
-              onClick={e => { e.stopPropagation(); setIdeationOpen(true); }}
-              style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: ACCENT, border: "none", color: "#fff", whiteSpace: "nowrap" }}>
-              + New Test
-            </button>
+            {clients.length > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); setIdeationOpen(true); }}
+                style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", background: ACCENT, border: "none", color: "#fff", whiteSpace: "nowrap" }}>
+                + New Test
+              </button>
+            )}
             <div style={{ fontSize: 12, color: MUTED, transform: testingOpen ? "rotate(180deg)" : "none", transition: "transform .2s", lineHeight: 1 }}>▾</div>
           </div>
-          {testingOpen && <>
+          {testingOpen && <>{tests.length === 0 ? (
+            /* Empty state */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 16px", gap: 12, textAlign: "center" }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", marginBottom: 4 }}>
+                {[
+                  { icon: "✨", label: "AI Ideation", desc: "Claude recommends tests from your page", color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
+                  { icon: "📊", label: "PIE Scoring", desc: "Prioritize by Potential, Importance & Ease", color: "#B45309", bg: "#FFFBEB", border: "#FDE68A" },
+                  { icon: "🔴", label: "Live Tracking", desc: "Monitor conversion rates across variants", color: "#0E7490", bg: "#ECFEFF", border: "#A5F3FC" },
+                  { icon: "💬", label: "Client Notes", desc: "Collaborative feedback on every test", color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
+                ].map(({ icon, label, desc, color, bg, border }) => (
+                  <div key={label} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: "14px 18px", minWidth: 130, flex: "1 1 130px" }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.4 }}>{desc}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: MUTED }}>Create your first test to start building a CRO pipeline.</div>
+              {clients.length > 0 && (
+                <button
+                  onClick={() => setIdeationOpen(true)}
+                  style={{ marginTop: 4, background: ACCENT, color: "#fff", border: "none", padding: "8px 20px", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif" }}>
+                  ✨ Start with AI Ideation
+                </button>
+              )}
+            </div>
+          ) : <>
             <div style={{ display: "flex", gap: isMobile ? 8 : 10, flexWrap: "wrap", marginBottom: 24 }}>
               <TestBadge label="Backlog"  count={backlog}  color="#1B3A6B" bg="#EEF2FF" border="#C7D2FE" />
               <TestBadge label="In Work"  count={inWork}   color="#B45309" bg="#FFFBEB" border="#FDE68A" />
@@ -180,7 +208,7 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
               />
             </div>
 
-          {/* Live Tests */}
+            {/* Live Tests */}
             {liveTests.length > 0 && (
               <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -232,21 +260,43 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
               </div>
             )}
           </>}
+          </>}
         </div>
 
         {/* ── SEO Intelligence ──────────────────────────────────────────────── */}
-        {clients.length > 0 && (
-          <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+        <div style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: 12, padding: isMobile ? "16px" : "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
 
             {/* Section header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: seoOpen ? 18 : 0, cursor: "pointer" }} onClick={() => setSeoOpen(v => !v)}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: clients.length > 0 && seoOpen ? 18 : 0, cursor: "pointer" }} onClick={() => setSeoOpen(v => !v)}>
               <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🔍 SEO Intelligence</div>
               <div style={{ flex: 1, height: 1, background: BORDER }} />
-              <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clientsWithSEO.length}/{clients.length} reporting</div>
+              {clients.length > 0
+                ? <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>{clientsWithSEO.length}/{clients.length} reporting</div>
+                : <div style={{ fontSize: 11, fontWeight: 600, color: MUTED }}>0 clients</div>
+              }
               <div style={{ fontSize: 12, color: MUTED, transform: seoOpen ? "rotate(180deg)" : "none", transition: "transform .2s", lineHeight: 1 }}>▾</div>
             </div>
 
-            {seoOpen && <>{/* Aggregate summary strip */}
+            {seoOpen && <>{clients.length === 0 ? (
+              /* Empty state */
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 16px", gap: 12, textAlign: "center" }}>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", marginBottom: 4 }}>
+                  {[
+                    { icon: "📊", label: "Domain Rating", desc: "Track DR & backlink growth" },
+                    { icon: "🔍", label: "Technical Audit", desc: "Critical, warnings & notices" },
+                    { icon: "🕷️", label: "Site Crawl", desc: "Pages, response times, thin content" },
+                    { icon: "🔗", label: "Backlink Intel", desc: "Referring domains & anchor data" },
+                  ].map(({ icon, label, desc }) => (
+                    <div key={label} style={{ background: "#F8FAFC", border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "14px 18px", minWidth: 130, flex: "1 1 130px" }}>
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.4 }}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12, color: MUTED }}>Add a client and run a site report to populate SEO data here.</div>
+              </div>
+            ) : <>{/* Aggregate summary strip */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
 
               {/* Avg DR */}
@@ -422,9 +472,9 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
               )}
             </div>
           </>}
+        </>}
 
-          </div>
-        )}
+        </div>
 
       </div>
 

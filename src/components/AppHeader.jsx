@@ -4,6 +4,7 @@ import { ACCENT, CARD, BORDER, TEXT, MUTED } from "../lib/constants";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { useAgency, useAgencyUpdater } from "../context/AgencyContext";
 import { uploadAgencyLogo } from "../lib/agencies";
+import HelpCenterModal from "./HelpCenterModal";
 
 export default function AppHeader({ right }) {
   const navigate      = useNavigate();
@@ -11,6 +12,7 @@ export default function AppHeader({ right }) {
   const agency        = useAgency();
   const onUpdateAgency = useAgencyUpdater();
   const [showBrand, setShowBrand] = useState(false);
+  const [showHelp,  setShowHelp]  = useState(false);
 
   const brand  = agency?.brand ?? {};
   const bg     = brand.bgColor    ?? null;
@@ -43,7 +45,15 @@ export default function AppHeader({ right }) {
               )}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flexShrink: 0 }}>
+            <button
+              onClick={() => setShowHelp(true)}
+              title="Help Center"
+              style={{ background: "rgba(255,255,255,.15)", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", color, fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", lineHeight: 1, fontFamily: "'Inter',sans-serif", gap: 4 }}
+            >
+              {!isMobile && <span style={{ fontSize: 11, opacity: 0.85 }}>Help</span>}
+              <span>?</span>
+            </button>
             {onUpdateAgency && (
               <button
                 onClick={() => setShowBrand(true)}
@@ -63,6 +73,7 @@ export default function AppHeader({ right }) {
             onClose={() => setShowBrand(false)}
           />
         )}
+        <HelpCenterModal open={showHelp} onClose={() => setShowHelp(false)} />
       </>
     );
   }

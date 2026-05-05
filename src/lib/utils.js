@@ -225,7 +225,7 @@ export const makePdfFromSvg = async (svgString, filename) => {
 };
 
 // ── AI hypothesis generation ────────────────────────────────────────────────
-export async function generateHypothesis(statement, context = {}) {
+export async function generateHypothesis(statement, context = {}, docContent = null) {
 
   const contextLines = [
     context.testName   && `Test name: ${context.testName}`,
@@ -234,10 +234,9 @@ export async function generateHypothesis(statement, context = {}) {
     context.audience   && `Audience: ${context.audience}`,
   ].filter(Boolean).join("\n");
 
-  const prompt = `You are a CRO (conversion rate optimisation) strategist. Convert the following plain-language test idea into a structured hypothesis with three distinct components.
+  const instructions = `You are a CRO (conversion rate optimisation) strategist. Convert the following into a structured hypothesis with three distinct components.
 
-${contextLines ? `Test context:\n${contextLines}\n` : ""}Plain-language idea: "${statement}"
-
+${contextLines ? `Test context:\n${contextLines}\n` : ""}${statement ? `Plain-language idea: "${statement}"\n` : ""}${docContent?.type === "text" ? `\n=== DOCUMENT CONTEXT ===\n${docContent.text}\n` : ""}
 Return ONLY valid JSON in exactly this shape — no markdown, no commentary:
 {
   "if": "...",
@@ -252,13 +251,21 @@ Rules:
 - Be specific and concise — each field should be 1–2 sentences
 - Use present tense`;
 
+  // Build message content — include PDF document block when provided
+  const messageContent = docContent?.type === "pdf"
+    ? [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: docContent.base64 } },
+        { type: "text", text: instructions },
+      ]
+    : instructions;
+
   const res = await fetch("/api/anthropic/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: messageContent }],
     }),
   });
 

@@ -150,11 +150,13 @@ export default function IdeationModal({
   const [step, setStep]                   = useState(STEP_CHOOSE);
   const [gaFile, setGaFile]               = useState(null);
   const [gscFile, setGscFile]             = useState(null);
+  const [docFile, setDocFile]             = useState(null);
   const [pageUrl, setPageUrl]             = useState("");
   const [instructions, setInstructions]   = useState("");
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError]                 = useState("");
   const capturedScreenshot                = useRef(null);
+  const capturedMobileScreenshot          = useRef(null);
 
   const defaultClientId = () => activeClientId !== "all" ? activeClientId : (clients[0]?.id ?? null);
   const [selectedClientId, setSelectedClientId] = useState(defaultClientId);
@@ -163,12 +165,14 @@ export default function IdeationModal({
     setStep(STEP_CHOOSE);
     setGaFile(null);
     setGscFile(null);
+    setDocFile(null);
     setPageUrl("");
     setInstructions("");
     setRecommendations([]);
     setSelectedRecs(new Set());
     setError("");
     capturedScreenshot.current = null;
+    capturedMobileScreenshot.current = null;
     setSelectedClientId(defaultClientId());
   };
 
@@ -190,9 +194,40 @@ export default function IdeationModal({
     });
   };
 
+  const readDocumentContent = async (file) => {
+    if (file.size > 10 * 1024 * 1024) throw new Error("Document too large (max 10 MB). Try a smaller file or export as .txt.");
+
+    // PDF → base64 for Anthropic native document support
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({ type: "pdf", base64: ev.target.result.split(",")[1] });
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // DOCX → extract body text via JSZip (already in project)
+    if (file.name.toLowerCase().endsWith(".docx")) {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const docXml = zip.files["word/document.xml"];
+      if (!docXml) throw new Error("Could not read .docx — try saving as PDF or .txt instead.");
+      const xml = await docXml.async("string");
+      const text = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+      return { type: "text", text };
+    }
+
+    // TXT, MD, and other text-based files
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve({ type: "text", text: String(ev.target.result).slice(0, 8000) });
+      reader.readAsText(file);
+    });
+  };
+
   const isValidUrl = (s) => { try { return /^https?:\/\/.+/.test(s) && Boolean(new URL(s)); } catch { return false; } };
 
-  const canAnalyze = isValidUrl(pageUrl) && gaFile && gscFile;
+  const canAnalyze = isValidUrl(pageUrl) && (docFile || (gaFile && gscFile));
 
   const analyze = async () => {
     if (!canAnalyze) return;
@@ -200,13 +235,20 @@ export default function IdeationModal({
     setError("");
 
     try {
-      // 1. Screenshot the URL via Puppeteer (optional — only available in local dev)
+      // 1. Screenshot the URL — desktop + mobile in parallel
       let screenshot = null;
       try {
         const activeClient = clients.find(c => c.id === selectedClientId);
-        const ssParams = new URLSearchParams({ url: pageUrl });
-        if (activeClient?.customUA) ssParams.set("ua", activeClient.customUA);
-        const ssRes = await fetch(`/api/screenshot?${ssParams.toString()}`);
+        const baseParams   = new URLSearchParams({ url: pageUrl });
+        if (activeClient?.customUA) baseParams.set("ua", activeClient.customUA);
+        const mobileParams = new URLSearchParams(baseParams);
+        mobileParams.set("mobile", "1");
+
+        const [ssRes, ssMobileRes] = await Promise.all([
+          fetch(`/api/screenshot?${baseParams.toString()}`),
+          fetch(`/api/screenshot?${mobileParams.toString()}`),
+        ]);
+
         if (ssRes.ok) {
           const ssData = await ssRes.json();
           if (ssData.dataUrl) {
@@ -216,22 +258,40 @@ export default function IdeationModal({
             capturedScreenshot.current = screenshot;
           }
         }
-      } catch { /* screenshot unavailable — proceed without it */ }
+        if (ssMobileRes.ok) {
+          const ssMobileData = await ssMobileRes.json();
+          if (ssMobileData.dataUrl) capturedMobileScreenshot.current = { dataUrl: ssMobileData.dataUrl };
+        }
+      } catch { /* screenshots unavailable — proceed without them */ }
 
-      // 2. Read CSVs
-      const [gaText, gscText] = await Promise.all([
-        readFileText(gaFile),
-        readFileText(gscFile),
-      ]);
-
+      // 2. Read CSVs (optional when a doc is provided)
       const truncate = (text, lines = 200) => text.split("\n").slice(0, lines).join("\n");
-      const gaTextTruncated  = truncate(gaText,  200);
-      const gscTextTruncated = truncate(gscText, 200);
+      let gaTextTruncated  = "";
+      let gscTextTruncated = "";
+      if (gaFile && gscFile) {
+        const [gaText, gscText] = await Promise.all([
+          readFileText(gaFile),
+          readFileText(gscFile),
+        ]);
+        gaTextTruncated  = truncate(gaText,  200);
+        gscTextTruncated = truncate(gscText, 200);
+      }
+
+      // 3. Read uploaded document (optional)
+      let docContent = null;
+      if (docFile) {
+        docContent = await readDocumentContent(docFile);
+      }
 
       const userContent = [
         ...(screenshot ? [{
           type: "image",
           source: { type: "base64", media_type: screenshot.mediaType, data: screenshot.base64 },
+        }] : []),
+        // PDF documents sent as native Anthropic document blocks
+        ...(docContent?.type === "pdf" ? [{
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: docContent.base64 },
         }] : []),
         {
           type: "text",
@@ -244,23 +304,29 @@ export default function IdeationModal({
               "(Follow these instructions when selecting which levers to focus on and what to avoid.)",
               "",
             ] : []),
-            "=== GOOGLE ANALYTICS (90-day) ===",
-            gaTextTruncated,
-            "",
-            "=== GOOGLE SEARCH CONSOLE (90-day) ===",
-            gscTextTruncated,
-            "",
-            screenshot
-              ? [
-                  "Before writing your recommendations, silently identify which 3 conversion levers (A–G) you will target — each must be a DIFFERENT letter.",
-                  "Cite specific metrics from the GA and GSC data above as evidence for each recommendation.",
-                  "Then return exactly 3 CRO test recommendations as JSON, each targeting a unique lever.",
-                ].join(" ")
-              : [
-                  "Before writing your recommendations, silently identify which 3 conversion levers (A–G) you will target — each must be a DIFFERENT letter.",
-                  "Cite specific metrics from the GA and GSC data above as evidence for each recommendation.",
-                  "Then return exactly 3 CRO test recommendations as JSON (no screenshot available), each targeting a unique lever.",
-                ].join(" "),
+            // Text-extracted documents (DOCX, TXT)
+            ...(docContent?.type === "text" ? [
+              "=== UPLOADED DOCUMENT CONTEXT ===",
+              docContent.text,
+              "",
+            ] : []),
+            ...(gaTextTruncated ? [
+              "=== GOOGLE ANALYTICS (90-day) ===",
+              gaTextTruncated,
+              "",
+            ] : []),
+            ...(gscTextTruncated ? [
+              "=== GOOGLE SEARCH CONSOLE (90-day) ===",
+              gscTextTruncated,
+              "",
+            ] : []),
+            [
+              "Before writing your recommendations, silently identify which 3 conversion levers (A–G) you will target — each must be a DIFFERENT letter.",
+              "Cite specific evidence from the data above for each recommendation.",
+              screenshot
+                ? "Then return exactly 3 CRO test recommendations as JSON, each targeting a unique lever."
+                : "Then return exactly 3 CRO test recommendations as JSON (no screenshot available), each targeting a unique lever.",
+            ].join(" "),
           ].join("\n"),
         },
       ];
@@ -351,10 +417,19 @@ export default function IdeationModal({
 
     let screenshots = {};
     if (screenshotUrl) {
+      const mobileUrl = capturedMobileScreenshot.current?.dataUrl || screenshotUrl;
       const cx = overlayDefs.length ? overlayDefs.reduce((s, o) => s + (o.xFrac ?? 0.5), 0) / overlayDefs.length : 0.5;
       const cy = overlayDefs.length ? overlayDefs.reduce((s, o) => s + (o.yFrac ?? 0.5), 0) / overlayDefs.length : 0.5;
-      const variantCrop = await cropImageToArea(screenshotUrl, cx, cy);
-      screenshots = { controlDesktop: screenshotUrl, controlMobile: screenshotUrl, variantDesktop: variantCrop, variantMobile: variantCrop };
+      const [variantDesktopCrop, variantMobileCrop] = await Promise.all([
+        cropImageToArea(screenshotUrl, cx, cy),
+        cropImageToArea(mobileUrl, cx, cy),
+      ]);
+      screenshots = {
+        controlDesktop: screenshotUrl,
+        controlMobile:  mobileUrl,
+        variantDesktop: variantDesktopCrop,
+        variantMobile:  variantMobileCrop,
+      };
     }
 
     return { testData, screenshots };
@@ -554,6 +629,30 @@ export default function IdeationModal({
                 />
               </div>
 
+              {/* Document upload */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1, height: 1, background: BORDER }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                    {gaFile && gscFile ? "and / or" : "or upload a document"}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: BORDER }} />
+                </div>
+                <FileDropZone
+                  label="Brief, Audit, or Research Document"
+                  hint="PDF, DOCX, or TXT — strategy brief, audit report, research notes, heatmap summary, etc."
+                  accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                  file={docFile}
+                  onFile={setDocFile}
+                  icon="📄"
+                />
+                {!gaFile && !gscFile && !docFile && (
+                  <div style={{ fontSize: 11, color: MUTED, marginTop: 6, textAlign: "center" }}>
+                    Upload GA + GSC data, a document, or both to enable analysis.
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
                 <button
                   onClick={() => setStep(STEP_CHOOSE)}
@@ -588,7 +687,7 @@ export default function IdeationModal({
                 Analyzing your data...
               </div>
               <div style={{ fontSize: 13, color: MUTED, maxWidth: 340, margin: "0 auto", lineHeight: 1.6 }}>
-                Screenshotting the page, then Claude is analyzing your GA &amp; GSC data to generate 3 tailored test recommendations.
+                Screenshotting the page, then Claude is analyzing your data to generate 3 tailored test recommendations.
               </div>
               <div style={{ marginTop: 28, display: "flex", justifyContent: "center", gap: 6 }}>
                 {[0, 1, 2].map(i => (

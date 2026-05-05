@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchAgencies, createAgency, updateAgency, deleteAgency, fetchPlatformConfig, setPlatformConfig, uploadAgencyLogo } from "../lib/agencies";
 import { BG, BORDER, CARD, MUTED, TEXT, ACCENT } from "../lib/constants";
+import TechDocsModal from "../components/TechDocsModal";
+import SuperAdminKanban from "../components/SuperAdminKanban";
+import SuperAdminAnalytics from "../components/SuperAdminAnalytics";
 
 const FIELD = { padding: "9px 12px", borderRadius: 7, border: `1.5px solid ${BORDER}`, fontFamily: "'Inter',sans-serif", fontSize: 13, color: TEXT, outline: "none", background: "#fff", width: "100%", boxSizing: "border-box" };
 const BTN   = (bg, color = "#fff") => ({ padding: "8px 18px", borderRadius: 7, border: "none", background: bg, color, fontFamily: "'Inter',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" });
@@ -25,6 +28,7 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
   const [pwSaved,   setPwSaved]   = useState(false);
   const [pwVisible, setPwVisible] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDocs,     setShowDocs]     = useState(false);
 
   useEffect(() => {
     fetchPlatformConfig().then(cfg => {
@@ -207,6 +211,12 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
+            onClick={() => setShowDocs(true)}
+            title="Technical Docs"
+            style={{ background: "none", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 12px", cursor: "pointer", color: MUTED, fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 5 }}>
+            <span>{"</>"}</span> Docs
+          </button>
+          <button
             onClick={() => setShowSettings(s => !s)}
             title="Platform Settings"
             style={{ background: showSettings ? "#F1F5F9" : "none", border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 10px", cursor: "pointer", color: MUTED, fontSize: 14 }}>
@@ -255,6 +265,11 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
       )}
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
+        {/* Analytics Dashboard */}
+        <div style={{ marginBottom: 28 }}>
+          <SuperAdminAnalytics />
+        </div>
+
         {/* Agency list */}
         {agencies.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: MUTED, fontSize: 14 }}>No agencies yet. Create your first one.</div>
@@ -288,6 +303,11 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
             })}
           </div>
         )}
+
+        {/* Projects Kanban */}
+        <div style={{ marginTop: 28 }}>
+          <SuperAdminKanban />
+        </div>
 
         {/* Create / Edit form */}
         {showForm && (
@@ -432,6 +452,7 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
           </div>
         )}
       </div>
+      <TechDocsModal open={showDocs} onClose={() => setShowDocs(false)} />
     </div>
   );
 }

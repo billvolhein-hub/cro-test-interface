@@ -196,7 +196,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
     await saveScreenshots(testId, next);
   };
 
-  const sharedTestProps = { tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients };
+  const sharedTestProps = { tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onSaveScreenshots, onClearScreenshot, clients };
 
   return (
     <AgencyContext.Provider value={{ agency, onUpdateAgency }}>

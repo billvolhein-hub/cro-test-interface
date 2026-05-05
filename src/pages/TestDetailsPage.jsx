@@ -19,7 +19,7 @@ import { pieScore, scoreColor, scoreBg, scoreBorder, scoreLabel, fmtDate, makePd
 import { PIE_CRITERIA, TEST_STATUSES, DEFAULT_STATUS, SCREENSHOT_ZONES, OVERLAY_TYPES, ACCENT, TEAL, BG, CARD, BORDER, TEXT, MUTED, DIM, IF_COLOR, THEN_COLOR, BECAUSE_COLOR } from "../lib/constants";
 import { loadScreenshots } from "../db";
 
-export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onClearScreenshot, clients }) {
+export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap, setScreenshotsMap, onUpdateTest, onDeleteTest, onSaveScreenshot, onSaveScreenshots, onClearScreenshot, clients }) {
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -54,6 +54,8 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
   const [aiStatement, setAiStatement] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [hypoDocFile, setHypoDocFile] = useState(null);
+  const hypoDocRef = useRef(null);
 
   const screenshots = screenshotsMap[Number(id)] || {};
 
@@ -114,21 +116,48 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
     setDraft({ if: test.if || "", then: test.then || "", because: test.because || "" });
     setAiStatement("");
     setAiError("");
+    setHypoDocFile(null);
     setHypoEdit(true);
   };
-  const cancelHypo = () => { setHypoEdit(false); setDraft({ if: "", then: "", because: "" }); setAiStatement(""); setAiError(""); };
+  const cancelHypo = () => { setHypoEdit(false); setDraft({ if: "", then: "", because: "" }); setAiStatement(""); setAiError(""); setHypoDocFile(null); };
+
+  const readHypoDocument = async (file) => {
+    if (file.size > 10 * 1024 * 1024) throw new Error("Document too large (max 10 MB).");
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve({ type: "pdf", base64: ev.target.result.split(",")[1] });
+        reader.readAsDataURL(file);
+      });
+    }
+    if (file.name.toLowerCase().endsWith(".docx")) {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const docXml = zip.files["word/document.xml"];
+      if (!docXml) throw new Error("Could not read .docx — try saving as PDF or .txt.");
+      const xml = await docXml.async("string");
+      return { type: "text", text: xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000) };
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve({ type: "text", text: String(ev.target.result).slice(0, 8000) });
+      reader.readAsText(file);
+    });
+  };
 
   const handleAiGenerate = async () => {
-    if (!aiStatement.trim()) return;
+    if (!aiStatement.trim() && !hypoDocFile) return;
     setAiLoading(true);
     setAiError("");
     try {
+      let docContent = null;
+      if (hypoDocFile) docContent = await readHypoDocument(hypoDocFile);
       const result = await generateHypothesis(aiStatement.trim(), {
         testName: test.testName,
         pageUrl: test.pageUrl,
         testType: test.testType,
         audience: test.audience,
-      });
+      }, docContent);
       setDraft(result);
     } catch (e) {
       setAiError(e.message);
@@ -193,6 +222,8 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
 
   const [pagePdfLoading, setPagePdfLoading] = useState(false);
   const [docLoading, setDocLoading] = useState(false);
+  const [vizLoading, setVizLoading] = useState(false);
+  const [vizError, setVizError] = useState("");
 
   const handleDownloadDoc = async () => {
     setDocLoading(true);
@@ -441,6 +472,123 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
     finally { setPdfLoading(false); }
   };
 
+  const cropToArea = (dataUrl, cx, cy) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const cropH = Math.round(img.height * 0.55);
+        let sy = Math.round(cy * img.height - cropH / 2);
+        sy = Math.max(0, Math.min(img.height - cropH, sy));
+        const canvas = document.createElement("canvas");
+        canvas.width  = img.width;
+        canvas.height = cropH;
+        canvas.getContext("2d").drawImage(img, 0, sy, img.width, cropH, 0, 0, img.width, cropH);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
+  const handleGenerateViz = async () => {
+    if (!test.pageUrl || vizLoading) return;
+    setVizLoading(true);
+    setVizError("");
+    try {
+      // 1. Screenshot the page URL — desktop + mobile in parallel
+      const activeClient = clients?.find(c => c.id === test.clientId);
+      const baseParams = new URLSearchParams({ url: test.pageUrl });
+      if (activeClient?.customUA) baseParams.set("ua", activeClient.customUA);
+      const mobileParams = new URLSearchParams(baseParams);
+      mobileParams.set("mobile", "1");
+
+      const [ssDesktopRes, ssMobileRes] = await Promise.all([
+        fetch(`/api/screenshot?${baseParams}`),
+        fetch(`/api/screenshot?${mobileParams}`),
+      ]);
+      if (!ssDesktopRes.ok) throw new Error("Screenshot failed — check the page URL is accessible.");
+      const { dataUrl }       = await ssDesktopRes.json();
+      const { dataUrl: mobileDataUrl } = await ssMobileRes.json();
+      if (!dataUrl) throw new Error("No screenshot returned.");
+      const [header, base64] = dataUrl.split(",");
+      const mediaType = header.replace("data:", "").replace(";base64", "");
+
+      // 2. Ask Claude Haiku to place overlay annotations using the screenshot + hypothesis
+      let aiOverlays = [];
+      if (test.if || test.then || test.because) {
+        const aiRes = await fetch("/api/anthropic/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 512,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+                { type: "text", text: `You are a CRO strategist annotating a webpage for an A/B test. Identify the exact UI elements on this screenshot that correspond to the change described below and mark them with overlay annotations.
+
+Test: ${test.testName || ""}
+IF: ${test.if || ""}
+THEN: ${test.then || ""}
+BECAUSE: ${test.because || ""}
+
+Return ONLY valid JSON — no markdown, no commentary:
+{"overlays":[{"type":"CTA Highlight","note":"description max 60 chars","xFrac":0.5,"yFrac":0.4}]}
+
+Rules:
+- 1–3 overlays maximum — focus on the element(s) described in the IF statement
+- type must be one of: "Add/Blur", "Removed", "Copy Change", "Layout Shift", "Sticky Element", "CTA Highlight", "Brand Accent", "Annotation"
+- xFrac/yFrac: 0.0–1.0 fractions of screenshot width/height pointing to the element` },
+              ],
+            }],
+          }),
+        });
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          const rawText = aiData.content?.[0]?.text ?? "";
+          const match = rawText.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            aiOverlays = Array.isArray(parsed.overlays) ? parsed.overlays.slice(0, 3) : [];
+          }
+        }
+      }
+
+      // 3. Crop both desktop and mobile screenshots, then save all four zones atomically
+      const cx = aiOverlays.length ? aiOverlays.reduce((s, o) => s + (o.xFrac ?? 0.5), 0) / aiOverlays.length : 0.5;
+      const cy = aiOverlays.length ? aiOverlays.reduce((s, o) => s + (o.yFrac ?? 0.4), 0) / aiOverlays.length : 0.4;
+      const [variantDesktopCrop, variantMobileCrop] = await Promise.all([
+        cropToArea(dataUrl, cx, cy),
+        cropToArea(mobileDataUrl || dataUrl, cx, cy),
+      ]);
+      await onSaveScreenshots(Number(id), {
+        controlDesktop: dataUrl,
+        controlMobile:  mobileDataUrl || dataUrl,
+        variantDesktop: variantDesktopCrop,
+        variantMobile:  variantMobileCrop,
+      });
+
+      // 5. Commit overlays to the test record
+      if (aiOverlays.length > 0) {
+        const { W, totalH, zones } = computeSVGZones(test);
+        const variantZone = zones.find(z => z.key === "variantDesktop");
+        const mapped = aiOverlays.map((o, i) => {
+          const overlayType = OVERLAY_TYPES.find(t => t.label === o.type) ?? OVERLAY_TYPES.find(t => t.label === "Annotation");
+          const svgX = variantZone.x + (o.xFrac ?? 0.5) * variantZone.w;
+          const svgY = variantZone.y + (o.yFrac ?? 0.35) * variantZone.h;
+          return { id: Date.now() + i, label: overlayType.label, color: overlayType.color, note: o.note ?? "", relX: svgX / W, relY: svgY / totalH };
+        });
+        const nextOverlays = { ...overlaysByVariant, B: mapped };
+        setOverlaysByVariant(nextOverlays);
+        onUpdateTest(test.id, "overlays", nextOverlays);
+      }
+    } catch (e) {
+      setVizError(e.message || "Visualization generation failed.");
+    } finally {
+      setVizLoading(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "'Inter',sans-serif", color: TEXT }}>
       <style>{`
@@ -552,7 +700,23 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
         })()}
 
         {/* Action row */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+        <div style={{ marginBottom: vizError ? 10 : 28 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {/* Generate Visualizations */}
+          {!isPortal && test.pageUrl && (
+            <button
+              onClick={handleGenerateViz}
+              disabled={vizLoading}
+              title="Screenshot the page and use AI to place overlay annotations"
+              style={{ background: vizLoading ? MUTED : "linear-gradient(135deg, #7C3AED, #4F46E5)", color: "#fff", border: "none", borderRadius: 7, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: vizLoading ? "wait" : "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 7, opacity: vizLoading ? 0.7 : 1 }}
+            >
+              {vizLoading ? (
+                <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.3)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Generating…</>
+              ) : (
+                <><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1l1.5 4.5L14 7l-4.5 1.5L8 13l-1.5-4.5L2 7l4.5-1.5z" stroke="white" strokeWidth="1.3" strokeLinejoin="round"/></svg>Generate Visualizations</>
+              )}
+            </button>
+          )}
           <button
             onClick={openPreview}
             style={{ background: TEAL, color: "#fff", border: "none", borderRadius: 7, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 7 }}
@@ -586,6 +750,15 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
             )}
           </button>
         </div>
+        {vizError && (
+          <div style={{ marginTop: 10, background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: 7, padding: "10px 16px", fontSize: 12, color: "#DC2626", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span>{vizError}</span>
+            <button onClick={() => setVizError("")} style={{ background: "none", border: "none", color: "#DC2626", fontSize: 16, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+          </div>
+        )}
+        </div>
+
+        <div style={{ marginBottom: 28 }} />
 
         <div style={{ display: "grid", gridTemplateColumns: isTablet ? "1fr" : "1fr 340px", gap: 24 }}>
           {/* Left column */}
@@ -689,12 +862,30 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
                           />
                           <button
                             onClick={handleAiGenerate}
-                            disabled={aiLoading || !aiStatement.trim()}
-                            style={{ background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: aiLoading || !aiStatement.trim() ? "not-allowed" : "pointer", fontFamily: "'Inter',sans-serif", opacity: aiLoading || !aiStatement.trim() ? 0.6 : 1, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            disabled={aiLoading || (!aiStatement.trim() && !hypoDocFile)}
+                            style={{ background: ACCENT, color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: aiLoading || (!aiStatement.trim() && !hypoDocFile) ? "not-allowed" : "pointer", fontFamily: "'Inter',sans-serif", opacity: aiLoading || (!aiStatement.trim() && !hypoDocFile) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                             {aiLoading ? (
                               <><svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ animation: "spin 1s linear infinite" }}><circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,.3)" strokeWidth="2"/><path d="M14 8a6 6 0 00-6-6" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>Writing…</>
                             ) : "Generate"}
                           </button>
+                        </div>
+                        {/* Document attachment */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                          <input ref={hypoDocRef} type="file" accept=".pdf,.docx,.txt,.md" style={{ display: "none" }}
+                            onChange={e => setHypoDocFile(e.target.files[0] || null)} />
+                          <button
+                            onClick={() => hypoDocRef.current?.click()}
+                            style={{ display: "flex", alignItems: "center", gap: 5, background: hypoDocFile ? "#F0FDF4" : "#fff", border: `1.5px solid ${hypoDocFile ? "#86EFAC" : "#C0CFEA"}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: hypoDocFile ? "#15803D" : MUTED, cursor: "pointer", fontFamily: "'Inter',sans-serif", flexShrink: 0, whiteSpace: "nowrap", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <span>{hypoDocFile ? "✓" : "📄"}</span>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {hypoDocFile ? hypoDocFile.name : "Attach document"}
+                            </span>
+                          </button>
+                          {hypoDocFile && (
+                            <button onClick={() => setHypoDocFile(null)}
+                              style={{ background: "none", border: "none", color: MUTED, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+                          )}
+                          <span style={{ fontSize: 10, color: MUTED }}>PDF, DOCX, or TXT — optional document context</span>
                         </div>
                         {aiError && (
                           <div style={{ marginTop: 8, fontSize: 12, color: "#DC2626", fontWeight: 500 }}>{aiError}</div>
