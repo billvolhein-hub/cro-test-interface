@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAgency } from "../context/AgencyContext";
 import AppHeader from "../components/AppHeader";
 import ClientsModal from "../components/ClientsModal";
 import IdeationModal from "../components/IdeationModal";
@@ -27,6 +28,8 @@ export default function HomePage({ agencySlug = "", tests, onCreateTest, onCreat
   const navigate = useNavigate();
   const ap = (path) => `/${agencySlug}${path}`;
   const { isMobile } = useBreakpoint();
+  const agency = useAgency();
+  useEffect(() => { document.title = agency ? `${agency.name} — MetricsEdge` : "MetricsEdge"; }, [agency?.name]);
 
   const [clientsModalOpen,  setClientsModalOpen]  = useState(false);
   const [notesFeedOpen,     setNotesFeedOpen]     = useState(true);

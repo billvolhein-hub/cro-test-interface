@@ -5,29 +5,12 @@ import { fetchClients, fetchTests } from "./lib/api";
 import { SuperAdminGate, PortalGate } from "./components/PasswordGate";
 import { PortalContext } from "./context/PortalContext";
 import { ACCENT, BG, MUTED } from "./lib/constants";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const SuperAdminPage  = lazy(() => import("./pages/SuperAdminPage"));
 const AgencyWrapper   = lazy(() => import("./components/AgencyWrapper"));
 const TestDetailsPage = lazy(() => import("./pages/TestDetailsPage"));
 const ClientPage      = lazy(() => import("./pages/ClientPage"));
-
-// ── Portal wrapper — looks up client by token, applies gate + context ─────────
-function PortalTokenGate({ clients, screenshotsMap, setScreenshotsMap, onUpdateTest, onSaveScreenshot, onClearScreenshot, onUpdateClientBrand }) {
-  const { portalToken } = useParams();
-  const client = clients.find(c => c.portalToken === portalToken);
-  return (
-    <PortalGate client={client}>
-      <PortalContext.Provider value={{ isPortal: true }}>
-        {/* children rendered by the Route's element */}
-        <ClientPage
-          clients={clients}
-          tests={[]}  // portal fetches its own
-          onUpdateClientBrand={onUpdateClientBrand}
-        />
-      </PortalContext.Provider>
-    </PortalGate>
-  );
-}
 
 // ── Portal shell — fetches all clients (needed to resolve portalToken) ────────
 function PortalShell({ children }) {
@@ -97,6 +80,7 @@ function Spinner() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ErrorBoundary>
       <Suspense fallback={<Spinner />}>
         <Routes>
           {/* Platform admin — manage agencies */}
@@ -124,6 +108,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

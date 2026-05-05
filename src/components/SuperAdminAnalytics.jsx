@@ -194,7 +194,10 @@ export default function SuperAdminAnalytics() {
     <div style={{ marginBottom: 8 }}>
       {/* Section header */}
       <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(o => !o)}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } }}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: "14px 20px", background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: open ? "10px 10px 0 0" : 10, userSelect: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 16 }}>📊</span>

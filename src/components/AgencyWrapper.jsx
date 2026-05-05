@@ -10,6 +10,7 @@ import {
 import { AgencyContext } from "../context/AgencyContext";
 import { AgencyGate } from "./PasswordGate";
 import { BG, MUTED } from "../lib/constants";
+import ErrorBoundary from "./ErrorBoundary";
 
 const HomePage           = lazy(() => import("../pages/HomePage"));
 const TestDetailsPage    = lazy(() => import("../pages/TestDetailsPage"));
@@ -213,6 +214,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
         </div>
       )}
 
+      <ErrorBoundary>
       <Suspense fallback={<Spinner />}>
       <Routes>
         <Route path="/"
@@ -250,6 +252,7 @@ function AgencyApp({ agency, setAgency, isImpersonating, tests, setTests, client
         <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
       </Routes>
       </Suspense>
+      </ErrorBoundary>
     </AgencyContext.Provider>
   );
 }

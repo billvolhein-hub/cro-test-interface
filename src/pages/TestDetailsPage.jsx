@@ -84,6 +84,12 @@ export default function TestDetailsPage({ agencySlug = "", tests, screenshotsMap
     onUpdateTest(test.id, "overlays", updated);
   };
 
+  useEffect(() => {
+    document.title = test
+      ? `${test.testName || "Untitled Test"} — MetricsEdge`
+      : "MetricsEdge";
+  }, [test?.testName]);
+
   // Load screenshots from IDB on mount
   useEffect(() => {
     if (!id || screenshotsMap[Number(id)]) return;

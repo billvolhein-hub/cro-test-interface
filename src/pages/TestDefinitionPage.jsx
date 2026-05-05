@@ -38,6 +38,12 @@ export default function TestDefinitionPage({ agencySlug = "", tests, screenshots
 
   const screenshots = screenshotsMap[testId] || {};
 
+  useEffect(() => {
+    document.title = test
+      ? `Edit: ${test.testName || "Untitled Test"} — MetricsEdge`
+      : "MetricsEdge";
+  }, [test?.testName]);
+
   // Load screenshots from IDB if not already in cache
   useEffect(() => {
     if (!testId || screenshotsMap[testId]) return;

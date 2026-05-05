@@ -189,8 +189,11 @@ function KanbanColumn({ col, cards, isDragOver, onDragOver, onDragLeave, onDrop,
             <div
               key={card.id}
               draggable
+              role="button"
+              tabIndex={0}
               onDragStart={e => onDragStart(e, card.id)}
               onClick={() => onEditCard(card)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEditCard(card); } }}
               style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderLeft: `3px solid ${p.dot}`, borderRadius: 8, padding: "10px 12px", cursor: "grab", transition: "box-shadow .12s, border-color .12s", userSelect: "none" }}
               onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,.1)"; e.currentTarget.style.borderColor = p.dot; }}
               onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.borderLeftColor = p.dot; }}
@@ -362,7 +365,10 @@ export default function SuperAdminKanban() {
 
         {/* Section header */}
         <div
+          role="button"
+          tabIndex={0}
           onClick={() => setOpen(v => !v)}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(v => !v); } }}
           style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", borderBottom: open ? `1px solid ${BORDER}` : "none" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>🗂 Projects</div>
           <div style={{ flex: 1, height: 1, background: BORDER }} />

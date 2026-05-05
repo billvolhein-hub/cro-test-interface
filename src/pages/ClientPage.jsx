@@ -1,18 +1,19 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppHeader, { PortalHeader } from "../components/AppHeader";
-import IdeationModal from "../components/IdeationModal";
 import { usePortal } from "../context/PortalContext";
 import { pieScore, scoreColor, scoreBg, scoreBorder, fmtDate, toSlug } from "../lib/utils";
 import { TEST_STATUSES, PIE_CRITERIA, DEFAULT_STATUS, ACCENT, TEAL, GOLD, BG, CARD, BORDER, TEXT, MUTED, DIM } from "../lib/constants";
 import ClientNotesFeed from "../components/ClientNotesFeed";
-import CrawlReport from "../components/CrawlReport";
-import AhrefsReport from "../components/AhrefsReport";
-import CrossSignalReport from "../components/CrossSignalReport";
-import ReportBuilderModal from "../components/ReportBuilderModal";
 import { useBreakpoint } from "../lib/useBreakpoint";
 import { regeneratePortalToken } from "../lib/api";
 import { exportTestingCalendar } from "../lib/exportCalendar";
+
+const IdeationModal     = lazy(() => import("../components/IdeationModal"));
+const CrawlReport       = lazy(() => import("../components/CrawlReport"));
+const AhrefsReport      = lazy(() => import("../components/AhrefsReport"));
+const CrossSignalReport = lazy(() => import("../components/CrossSignalReport"));
+const ReportBuilderModal = lazy(() => import("../components/ReportBuilderModal"));
 
 const PIPELINE = [
   { label: "Backlog",  statuses: ["Backlog"],                          color: "#1B3A6B", bg: "#EEF2FF", border: "#C7D2FE" },
@@ -108,6 +109,12 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
   const crawlRef   = useRef(null);
   const ahrefsRef  = useRef(null);
   const modalRef   = useRef(null);
+
+  useEffect(() => {
+    document.title = client
+      ? `${client.name}${isPortal ? " Portal" : ""} — MetricsEdge`
+      : "MetricsEdge";
+  }, [client?.name, isPortal]);
 
   // Trigger Ahrefs fetch only once BOTH Screaming Frog files are done
   useEffect(() => {
@@ -704,6 +711,7 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
 
         {/* ══ SEO TAB ══════════════════════════════════════════════════════════ */}
         {activeTab === "seo" && (
+          <Suspense fallback={<div style={{ padding: "48px 0", textAlign: "center", fontSize: 13, color: MUTED, fontFamily: "'Inter',sans-serif" }}>Loading…</div>}>
           <>
             {/* ── Domain selector ── */}
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
@@ -842,9 +850,11 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
               </>
             )}
           </>
+          </Suspense>
         )}
       </div>
 
+      <Suspense fallback={null}>
       <IdeationModal
         open={ideationOpen}
         onClose={() => setIdeationOpen(false)}
@@ -863,6 +873,7 @@ export default function ClientPage({ agencySlug = "", clients, tests, onCreateTe
           navigate(ap(`/tests/${saved[0].id}`));
         }}
       />
+      </Suspense>
     </div>
   );
 }

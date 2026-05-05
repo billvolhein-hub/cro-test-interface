@@ -31,6 +31,8 @@ export default function SuperAdminPage({ agencies: initial, onAgenciesChange }) 
   const [showSettings, setShowSettings] = useState(false);
   const [showDocs,     setShowDocs]     = useState(false);
 
+  useEffect(() => { document.title = "Platform Admin — MetricsEdge"; }, []);
+
   useEffect(() => {
     fetchPlatformConfig().then(cfg => {
       if (cfg.super_admin_password) setPwDraft(cfg.super_admin_password);
