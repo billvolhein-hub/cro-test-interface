@@ -101,23 +101,36 @@ const CONTENT = {
 
       <H3 color={ACCENT}>Component Hierarchy</H3>
       <Code block>{`App
-├── SuperAdminShell → SuperAdminPage
-│                     ├── SuperAdminAnalytics (charts dashboard — own fetch)
-│                     ├── SuperAdminKanban    (projects board — own load/save)
-│                     └── TechDocsModal       (this modal)
-├── AgencyWrapper (fetches agency record)
-│   └── AgencyGate (password check)
-│       └── AgencyContext.Provider
-│           └── AgencyApp (all state + handlers)
-│               ├── AppHeader (gear + ? Help buttons)
-│               │   └── HelpCenterModal (agency help center)
-│               ├── HomePage
-│               ├── ClientPage
-│               ├── TestDetailsPage
-│               └── TestDefinitionPage
-└── PortalShell → PortalGate → PortalContext.Provider
-    ├── ClientPage (isPortal = true)
-    └── TestDetailsPage (isPortal = true)`}</Code>
+├── ErrorBoundary (catches crashes → graceful fallback)
+│   └── Suspense
+│       ├── SuperAdminShell → SuperAdminPage
+│       │                     ├── SuperAdminAnalytics (charts dashboard — own fetch)
+│       │                     ├── SuperAdminKanban    (projects board — own load/save)
+│       │                     └── TechDocsModal       (this modal)
+│       ├── AgencyWrapper (fetches agency record)
+│       │   └── AgencyGate (password check)
+│       │       └── AgencyContext.Provider
+│       │           └── AgencyApp (all state + handlers)
+│       │               ├── ErrorBoundary (per-route boundary)
+│       │               │   └── Suspense
+│       │               │       ├── HomePage        (sets document.title)
+│       │               │       ├── ClientPage       (sets document.title; lazy-loads SEO sub-components)
+│       │               │       ├── TestDetailsPage  (sets document.title)
+│       │               │       └── TestDefinitionPage (sets document.title)
+│       │               └── AppHeader (gear + ? Help buttons)
+│       │                   └── HelpCenterModal (agency help center)
+│       └── PortalShell → PortalGate → PortalContext.Provider
+│           ├── ClientPage (isPortal = true)
+│           └── TestDetailsPage (isPortal = true)`}</Code>
+
+      <H3 color={ACCENT}>Dynamic Page Titles</H3>
+      <P>Every route sets <Code>document.title</Code> via a <Code>useEffect</Code> so the browser tab reflects the current context:</P>
+      <Li><Code>/</Code> → "Platform Admin — MetricsEdge"</Li>
+      <Li><Code>/:slug/</Code> → "{"{AgencyName}"} — MetricsEdge" (via <Code>useAgency()</Code>)</Li>
+      <Li><Code>/:slug/clients/:id</Code> → "{"{ClientName}"} — MetricsEdge"</Li>
+      <Li><Code>/:slug/tests/:id</Code> → "{"{TestName}"} — MetricsEdge"</Li>
+      <Li><Code>/:slug/tests/:id/edit</Code> → "Edit: {"{TestName}"} — MetricsEdge"</Li>
+      <Li><Code>/portal/:token</Code> → "{"{ClientName}"} Portal — MetricsEdge"</Li>
 
       <H3 color={ACCENT}>State Management</H3>
       <P>There is no Redux or Zustand. All state is lifted to <Code>AgencyApp</Code> and flows down via props. Update handlers (e.g. <Code>onCreateTest</Code>, <Code>onUpdateTest</Code>) are passed down from <Code>AgencyApp</Code> to all child pages.</P>
@@ -553,6 +566,27 @@ messages: [{ role: "user", content: [
       <H3 color={ACCENT}>Bundle Strategy</H3>
       <P>The app uses route-level code splitting + vendor chunking to minimize initial load. The old monolithic 2,248 kB bundle is now ~18 kB on first visit — all heavy libraries load on-demand only.</P>
 
+      <H3 color={ACCENT}>Error Boundaries</H3>
+      <P><Code>src/components/ErrorBoundary.jsx</Code> is a React class component (required for error catching). Two boundaries are in place:</P>
+      <Li><strong>App-level:</strong> wraps the root <Code>{"<Suspense>"}</Code> in <Code>App.jsx</Code> — catches any crash in any route</Li>
+      <Li><strong>Per-route:</strong> wraps the inner <Code>{"<Suspense>"}</Code> in <Code>AgencyWrapper.jsx</Code> — isolates agency route crashes from the shell</Li>
+      <Code block>{`// ErrorBoundary.jsx — standard React class pattern
+class ErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) return <ErrorFallback onReset={() => this.setState({ error: null })} />;
+    return this.props.children;
+  }
+}
+
+// Usage — always wrap Suspense:
+<ErrorBoundary>
+  <Suspense fallback={<Spinner />}>
+    <Routes>...</Routes>
+  </Suspense>
+</ErrorBoundary>`}</Code>
+
       <H3 color={ACCENT}>Route-Level Lazy Loading</H3>
       <P>Every top-level page is wrapped in <Code>React.lazy()</Code> + <Code>{"<Suspense>"}</Code>. The pattern is applied in both <Code>App.jsx</Code> (top-level routes) and <Code>AgencyWrapper.jsx</Code> (agency sub-routes):</P>
       <Code block>{`// App.jsx
@@ -561,11 +595,6 @@ const AgencyWrapper   = lazy(() => import("./components/AgencyWrapper"));
 const TestDetailsPage = lazy(() => import("./pages/TestDetailsPage"));
 const ClientPage      = lazy(() => import("./pages/ClientPage"));
 
-// Wrap <Routes> in Suspense:
-<Suspense fallback={<Spinner />}>
-  <Routes>...</Routes>
-</Suspense>
-
 // AgencyWrapper.jsx — same pattern for sub-pages:
 const HomePage           = lazy(() => import("../pages/HomePage"));
 const TestDetailsPage    = lazy(() => import("../pages/TestDetailsPage"));
@@ -573,18 +602,50 @@ const TestDefinitionPage = lazy(() => import("../pages/TestDefinitionPage"));
 const ClientPage         = lazy(() => import("../pages/ClientPage"));`}</Code>
       <P><strong>Rule:</strong> Every new page added to the router must use <Code>React.lazy()</Code>. Never statically import a page component in App.jsx or AgencyWrapper.jsx.</P>
 
-      <H3 color={ACCENT}>Vendor Chunk Map</H3>
+      <H3 color={ACCENT}>ClientPage Sub-Component Lazy Loading</H3>
+      <P>ClientPage lazy-loads its 5 heaviest sub-components so users on the Testing tab never pay the cost of the SEO components. The page chunk dropped from ~265 kB to ~37.5 kB as a result.</P>
+      <Code block>{`// ClientPage.jsx — module-scope lazy declarations
+const IdeationModal      = lazy(() => import("../components/IdeationModal"));
+const CrawlReport        = lazy(() => import("../components/CrawlReport"));
+const AhrefsReport       = lazy(() => import("../components/AhrefsReport"));
+const CrossSignalReport  = lazy(() => import("../components/CrossSignalReport"));
+const ReportBuilderModal = lazy(() => import("../components/ReportBuilderModal"));
+
+// SEO tab content is wrapped in its own Suspense:
+{activeTab === "seo" && (
+  <Suspense fallback={<LoadingSpinner />}>
+    <>
+      <AhrefsReport ... />
+      <CrawlReport ... />
+      <CrossSignalReport ... />
+      <ReportBuilderModal ... />
+    </>
+  </Suspense>
+)}
+
+// IdeationModal (always in tree) gets its own boundary:
+<Suspense fallback={null}>
+  <IdeationModal ... />
+</Suspense>`}</Code>
+
+      <H3 color={ACCENT}>Chunk Map</H3>
       <P>Heavy libraries are grouped into named chunks via <Code>vite.config.js manualChunks</Code>. Each chunk only loads when a user triggers the feature that needs it:</P>
       <Table
         headers={["Chunk", "Size", "Loads when"]}
         rows={[
+          ["index (initial)", "~19 kB", "Every page — shell + router only"],
           ["vendor-react", "180 kB", "Every page (React core + router)"],
+          ["vendor-supabase", "~90 kB", "Every page (Supabase client)"],
+          ["ClientPage", "~37.5 kB", "User navigates to a client"],
+          ["AhrefsReport", "~57 kB", "User opens SEO tab"],
+          ["CrossSignalReport", "~101 kB", "User opens SEO tab"],
+          ["CrawlReport", "~42 kB", "User opens SEO tab"],
+          ["IdeationModal", "~25 kB", "ClientPage first render"],
           ["vendor-3d", "1,282 kB", "User clicks 'View Site Tree' in CrawlReport"],
           ["vendor-excel", "938 kB", "User clicks 'Export .xlsx' (exportCalendar)"],
           ["vendor-pdf", "824 kB", "User exports PDF (jsPDF + html2canvas)"],
           ["vendor-docs", "506 kB", "User uploads a .docx/.zip document"],
           ["vendor-charts", "434 kB", "Super admin views Platform Analytics"],
-          ["vendor-supabase", "~90 kB", "Every page (Supabase client)"],
         ]}
       />
 
@@ -706,10 +767,12 @@ npm run preview`}</Code>
 
       <H3 color={ACCENT}>Adding a New Page / Route</H3>
       <Code block>{`// 1. Create the page component in src/pages/NewPage.jsx with a default export
+//    Add: useEffect(() => { document.title = "Page Name — MetricsEdge"; }, [dep]);
+
 // 2. Lazy-import it in AgencyWrapper.jsx (NEVER static import — keeps bundle small):
 const NewPage = lazy(() => import("../pages/NewPage"));
 
-// 3. Add the route inside the <Suspense> in AgencyApp:
+// 3. Add the route inside the <ErrorBoundary><Suspense> in AgencyApp:
 <Route path="/new-path"
   element={<NewPage agencySlug={slug} {...sharedProps} />}
 />

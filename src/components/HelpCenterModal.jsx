@@ -93,6 +93,17 @@ const CONTENT = {
       <H3 color={ACCENT}>Top Header Actions</H3>
       <Li><strong>⚙ Gear icon</strong> — opens Brand Settings to customize your header color and logo.</Li>
       <Li><strong>? Help</strong> — you're here now!</Li>
+
+      <H3 color={ACCENT}>Browser Tab Titles</H3>
+      <P>Each page updates the browser tab title automatically so you can orient quickly when switching between tabs:</P>
+      <Li>Platform Admin → "Platform Admin — MetricsEdge"</Li>
+      <Li>Agency dashboard → "{"{Agency Name}"} — MetricsEdge"</Li>
+      <Li>Client page → "{"{Client Name}"} — MetricsEdge"</Li>
+      <Li>Test detail → "{"{Test Name}"} — MetricsEdge"</Li>
+      <Li>Client portal → "{"{Client Name}"} Portal — MetricsEdge"</Li>
+
+      <H3 color={ACCENT}>Error Recovery</H3>
+      <P>If a page fails to load (network issue, unexpected error), MetricsEdge shows a clear error message with a <strong>Try again</strong> button instead of a blank screen. Click it to recover without a full page refresh.</P>
     </div>
   ),
 
