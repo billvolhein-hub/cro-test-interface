@@ -2,7 +2,6 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { fetchAgencies } from "./lib/agencies";
 import { fetchClients, fetchTests } from "./lib/api";
-import { loadScreenshots, saveScreenshots, removeScreenshots } from "./db";
 import { SuperAdminGate, PortalGate } from "./components/PasswordGate";
 import { PortalContext } from "./context/PortalContext";
 import { ACCENT, BG, MUTED } from "./lib/constants";
