@@ -3,6 +3,11 @@
 Re-run of the SearchStax suggested promotion rules (source: `U_of_A_SearchStax_Update_7_7`)
 applying two new rules to the promotion targets.
 
+> **v3 (`U_of_A_SearchStax_Promotion_Rules_v3_multi.csv`) is the current recommended sheet.**
+> It changes head-term handling from a single hub link to **multiple promotions** (the full
+> degree family). See the "v3 — multi-promotion" section at the bottom. v2 files are kept for
+> reference.
+
 ## Rules applied
 
 1. **Generic major/degree terms → Degree Search home.**
@@ -57,3 +62,38 @@ applying two new rules to the promotion targets.
 > Note: for Rule 1 rows the target is now the hub, so the original `priority`,
 > `target_current_rank`, and `promotion_needed` values (which described the previous target)
 > are retained but no longer describe the new target.
+
+---
+
+## v3 — multi-promotion (recommended)
+
+`U_of_A_SearchStax_Promotion_Rules_v3_multi.csv` refines the head-term handling: instead of
+sending a generic term to a single hub link, it pins the whole **degree family** as multiple
+promoted results. Specific terms are unchanged (one entity each).
+
+**Model**
+- **Head/generic term → the full degree family (multi-promote)** when the major has ≥2
+  degree-level pages. Example — `accounting` promotes: `accounting` (base), `accounting-bsba`
+  (UG), `accounting-ma` + `accounting-ms` (Grad), `accounting-gc` (cert).
+- **Head term with no real family → DS home** (single link). Applies to single-program or
+  emphasis-only majors (e.g. a lone nurse-practitioner track, `applied physics`).
+- **Specific term → its single UG/Grad/PhD entity** (unchanged from v2).
+
+**Scope:** family = degree levels only (base + UG + Grad + PhD + cert). Emphasis/concentration
+pages are excluded (including them would convert only 33 of the 238 hub-fallbacks — 205 majors
+are genuinely single-program).
+
+**Format:** long — one row per promoted URL. `promote_rank` gives pin order
+(base → UG → Grad → cert → PhD); `promote_level` labels each; families derive from the major of
+the row's original target, so a trigger only expands when it genuinely matches that major.
+
+**Outcome:** 1,011 triggers → 1,340 rows.
+
+| outcome | triggers |
+|---|---|
+| head term → family multi-promote (avg 3.2, max 5 results) | 152 |
+| head term → DS home (no family) | 238 |
+| specific / review / navigational (single promotion) | 621 |
+
+`transform_v3.py` builds v3 from the v2 sheet + the original catalog. To include emphasis pages
+in families, add emphasis/track slugs when building `fam`.
